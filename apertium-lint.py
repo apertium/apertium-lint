@@ -5,20 +5,22 @@ import argparse
 import lexd_lint
 import sys, os.path
 
+PATH = os.path.dirname(__file__) + '/'
+
 Language.build_library(
-    'build/langs.so',
+    PATH+'build/langs.so',
     [
-        'tree-sitter-apertium/tree-sitter-lexd',
-        'tree-sitter-apertium/tree-sitter-cg',
-        'tree-sitter-apertium/tree-sitter-twolc',
-        'tree-sitter-apertium/tree-sitter-rtx'
+        PATH+'tree-sitter-apertium/tree-sitter-lexd',
+        PATH+'tree-sitter-apertium/tree-sitter-cg',
+        PATH+'tree-sitter-apertium/tree-sitter-twolc',
+        PATH+'tree-sitter-apertium/tree-sitter-rtx'
     ]
 )
 
-LEXD_LANGUAGE = Language('build/langs.so', 'lexd')
-#CG_LANGUAGE = Language('build/langs.so', 'cg')
-#TWOLC_LANGUAGE = Language('build/langs.so', 'twolc')
-#RTX_LANGUAGE = Language('build/langs.so', 'rtx')
+LEXD_LANGUAGE = Language(PATH+'build/langs.so', 'lexd')
+#CG_LANGUAGE = Language(PATH+'build/langs.so', 'cg')
+#TWOLC_LANGUAGE = Language(PATH+'build/langs.so', 'twolc')
+#RTX_LANGUAGE = Language(PATH+'build/langs.so', 'rtx')
 
 def lint(filename, extension=''):
     ext = extension
