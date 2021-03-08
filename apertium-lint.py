@@ -18,9 +18,9 @@ Language.build_library(
 )
 
 LEXD_LANGUAGE = Language(PATH+'build/langs.so', 'lexd')
-#CG_LANGUAGE = Language(PATH+'build/langs.so', 'cg')
-#TWOLC_LANGUAGE = Language(PATH+'build/langs.so', 'twolc')
-#RTX_LANGUAGE = Language(PATH+'build/langs.so', 'rtx')
+CG_LANGUAGE = Language(PATH+'build/langs.so', 'cg')
+TWOLC_LANGUAGE = Language(PATH+'build/langs.so', 'twolc')
+RTX_LANGUAGE = Language(PATH+'build/langs.so', 'rtx')
 
 def lint(filename, extension=''):
     ext = extension

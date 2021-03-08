@@ -3,6 +3,9 @@
 from tree_sitter import Language, Parser
 from collections import defaultdict
 
+def text(node, contents, offset=0):
+    return contents[node.start_byte-offset:node.end_byte-offset].decode('utf-8')
+
 def get_side(node, count):
     parts = ''
     for c in node.children:
@@ -41,8 +44,7 @@ def examine_pattern_line(line, line_string): # Node, bytes
                 name = ''
                 for n in tok.children:
                     if n.type == 'lexicon_reference':
-                        a,b = n.children[0].start_byte,n.children[0].end_byte
-                        name = line_string[a-offset:b-offset].decode('utf-8')
+                        name = text(n.children[0], line_string, offset)
                         break
                 toks.append((name, get_side(tok, 'lexicon_reference')))
                 break
@@ -100,9 +102,6 @@ def examine_pattern_line(line, line_string): # Node, bytes
 def check_tags(tree, contents):
     tag_set = defaultdict(list)
     tag_use = defaultdict(list)
-    def tag_name(node):
-        nonlocal contents
-        return contents[node.start_byte:node.end_byte].decode('utf-8')
     def search(node):
         nonlocal tag_set, tag_use, contents
         for n in node.children:
@@ -110,11 +109,11 @@ def check_tags(tree, contents):
         if node.type == 'tag_setting':
             for n in node.children:
                 if n.type == 'tag':
-                    tag_set[tag_name(n)].append(n.start_point[0]+1)
+                    tag_set[text(n,contents)].append(n.start_point[0]+1)
         elif node.type in ['tag_filter', 'tag_distribution']:
             for n in node.children:
                 if n.type == 'tag':
-                    tag_use[tag_name(n)].append(n.start_point[0]+1)
+                    tag_use[text(n,contents)].append(n.start_point[0]+1)
     search(tree)
     for n in tag_set:
         if n not in tag_use:
@@ -130,7 +129,33 @@ def check_tags(tree, contents):
                 s += 's'
             s += ' ' + ', '.join(str(x) for x in tag_set[n])
             print("Tag '%s' filtered by but never set on %s." % (n, s))
-            
+
+def stats(tree, contents):
+    cur_name = ''
+    lex_counts = defaultdict(lambda: 0)
+    pat_counts = defaultdict(lambda: 0)
+    def count_anon(node):
+        if node.type == 'anonymous_lexicon':
+            return 1
+        else:
+            return sum(count_anon(x) for x in node.children)
+    for node in tree.children:
+        if node.type == 'pattern_block':
+            cur_name = ''
+            for ch in node.children:
+                if ch.type == 'identifier':
+                    cur_name = text(ch,contents)
+                elif ch.type == 'pattern_line':
+                    pat_counts[cur_name] += 1
+                    lex_counts[''] += count_anon(ch)
+        elif node.type == 'lexicon_block':
+            for ch in node.children:
+                if ch.type == 'identifier':
+                    cur_name = text(ch,contents)
+                elif ch.type == 'lexicon_line':
+                    lex_counts[cur_name] += 1
+    return lex_counts, pat_counts
+    
 def lint(filename, lang):
     print('Linting %s' % filename)
     p = Parser()
@@ -144,5 +169,30 @@ def lint(filename, lang):
                     if line.type == 'pattern_line':
                         s = contents[line.start_byte:line.end_byte]
                         examine_pattern_line(line, s)
+
         check_tags(tree.root_node, contents)
+
+        lstats, pstats = stats(tree.root_node, contents)
+
+        total = 0
+        for l in sorted(lstats.keys()):
+            if not l: continue
+            print('%s: %s' % (l, lstats[l]))
+            total += lstats[l]
+        print('All anonymous lexicons: %s' % (lstats['']))
+        total += lstats['']
+        print('=====')
+        print('Number of lexicons: %s' % len(lstats))
+        print('Total number of lexicon entries: %s\n' % total)
+
+        total = 0
+        for p in sorted(pstats.keys()):
+            if not p: continue
+            print('%s: %s' % (p, pstats[p]))
+            total += pstats[p]
+        print('Toplevel pattern: %s' % (pstats['']))
+        total += pstats['']
+        print('=====')
+        print('Number of patterns: %s' % len(pstats))
+        print('Total number of pattern lines: %s' % total)
     print('Done linting')
