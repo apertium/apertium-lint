@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
-from file_linter import FileLinter, Verbosity
-from lxml import etree
+from ..file_linter import FileLinter, Verbosity
+from .xml import XmlLinter
 from collections import defaultdict
 
-class DixLinter(FileLinter):
+class DixLinter(XmlLinter):
     stat_labels = {}
     nodes_with_text = ['i', 'l', 'r', 'g', 'ig']
     nodes_in_text = ['a', 'b', 'm', 'g', 'j', 's']
@@ -69,23 +69,17 @@ class DixLinter(FileLinter):
             l, r, _ = self.collect_child_strings(node, True)[0]
             return ('#'+l, '#'+r, '')
         return ('???', '???', '')
-
-def elct(element, child_type):
-    return len(list(element.iter(child_type)))
-
-class MonoDixLinter(DixLinter):
-    stat_labels = {}
-    def process_par_refs(self, tree):
+    def statcheck_par_refs(self):
         pref = defaultdict(list)
-        for pr in tree.iter('par'):
+        for pr in self.tree.iter('par'):
             pref[pr.get('n')].append(pr.sourceline)
         pdef = {}
-        for pd in tree.iter('pardef'):
-            self.record_stat(('pardef_entries', pd.get('n')), elct(pd, 'e'))
+        for pd in self.tree.iter('pardef'):
+            self.record_child_count(('pardef_entries', pd.get('n')), pd, 'e')
             pdef[pd.get('n')] = pd.sourceline
-        for sec in tree.iter('section'):
+        for sec in self.tree.iter('section'):
             name = sec.get('id') + '@' + sec.get('type')
-            self.record_stat(('section_entries', name), elct(sec, 'e'))
+            self.record_child_count(('section_entries', name), sec, 'e')
         for p in sorted(pref.keys()):
             if p not in pdef:
                 for ln in pref[p]:
@@ -93,6 +87,9 @@ class MonoDixLinter(DixLinter):
         for p in sorted(pdef.keys()):
             if p not in pref:
                 self.record(pdef[p], Verbosity.Warn, f'Pardef {p} defined but not used.')
+
+class MonoDixLinter(DixLinter):
+    stat_labels = {}
     def space_blank_entry(self, ent):
         strs = self.collect_child_strings(ent)
         parname = ''
@@ -167,12 +164,12 @@ class MonoDixLinter(DixLinter):
                     right.append((i, -1))
         self.really_space[par] = [left, right]
         return (left, right)
-    def check_space_blank(self, tree):
+    def check_space_blank(self):
         self.space_left = defaultdict(list)
         self.space_right = defaultdict(list)
         self.blank_left = defaultdict(list)
         self.blank_right = defaultdict(list)
-        for ent in tree.iter('e'):
+        for ent in self.tree.iter('e'):
             self.space_blank_entry(ent)
 
         # TODO: It could be useful to recursively enumerate the pardefs
@@ -190,12 +187,6 @@ class MonoDixLinter(DixLinter):
             self.record(self.space_left[''][idx][0], Verbosity.Error, 'Entry can begin with a space on the left side.')
         for idx, ct in rs:
             self.record(self.space_right[''][idx][0], Verbosity.Error, 'Entry can begin with a space on the right side.')
-    def process(self):
-        super().process()
-        tree = etree.parse(self.path)
-        root = tree.getroot()
-        self.process_par_refs(root)
-        self.check_space_blank(root)
 
 # TODO: when we have a bidix linter, register it with
 # re.compile(r'^apertium-\w+-\w+.\w+-\w+.dix$')

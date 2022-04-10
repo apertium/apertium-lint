@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 import os.path
+from unicodedata import normalize
 
 class Verbosity:
     Error = 1
@@ -68,11 +69,18 @@ class FileLinter:
                     print(f'{ind}{name}:')
                     disp_dict(dct[k], prefix + [k])
         disp_dict(self.statistics, [])
-    def stats(self):
+    def check_encoding(self):
+        with open(self.path, 'rb') as fin:
+            try:
+                txt = fin.read().decode('utf-8')
+            except UnicodeDecodeError:
+                return
+            for num, line in enumerate(txt.splitlines(), 1):
+                if normalize('NFC', line) != line:
+                    self.record(num, Verbosity.Warn, 'Line contains non-normalized characters.')
+    def load(self):
         pass
-    def process(self):
-        pass
-    def lint(path, extension=''):
+    def lint(path, extension='', check=True, stats=False):
         cls = FileLinter
         if extension in FileLinter.Extensions:
             cls = FileLinter.Extensions[extension]
@@ -87,7 +95,17 @@ class FileLinter:
                         cls = c
                         break
         ret = cls(path)
-        ret.process()
+        ret.load()
+        prefixes = []
+        if check:
+            prefixes += ['check_', 'statcheck_']
+        if stats:
+            prefixes += ['stat_', 'statcheck_']
+        prefixes = sorted(set(prefixes))
+        for attr in dir(ret):
+            if any(attr.startswith(p) for p in prefixes):
+                if callable(getattr(ret, attr)):
+                    getattr(ret, attr).__call__()
         return ret
     def register(cls, ext='', regexs=[]):
         if ext:
