@@ -2,6 +2,7 @@
 
 from collections import defaultdict
 import os.path
+import re
 from unicodedata import normalize
 
 class Verbosity:
@@ -112,4 +113,4 @@ class FileLinter:
             FileLinter.Extensions[ext] = cls
         if regexs:
             for r in regexs:
-                FileLinter.Identifiers.append((r, cls))
+                FileLinter.Identifiers.append((re.compile(r), cls))

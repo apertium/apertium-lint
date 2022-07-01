@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 
 from ..file_linter import FileLinter, Verbosity
-from .tree_sitter_langs import Parser, LEXD_LANGUAGE
+from .tree_sitter_linter import TreeSitterLinter
+from .tree_sitter_langs import LEXD_LANGUAGE
 from collections import defaultdict
 
-class LexdLinter(FileLinter):
+class LexdLinter(TreeSitterLinter):
+    language = LEXD_LANGUAGE
     stat_labels = {
         'lex_entries': 'Lexicon entries',
         'pat_entries': 'Pattern lines',
         ('lex_entries', ''): 'All anonymous lexicons',
         ('pat_entries', ''): 'Toplevel pattern'
     }
-    def text(self, node, offset=0):
-        return self.content[node.start_byte-offset:node.end_byte-offset].decode('utf-8')
     def get_side(self, node, count_type):
         parts = ''
         for c in node.children:
@@ -101,21 +101,17 @@ class LexdLinter(FileLinter):
                 msg += '^\n  Possible partition point'
                 self.record(line_number, Verbosity.Warn, msg)
                 return
-    def gather_tags(self, node):
-        for n in node.children:
-            self.gather_tags(n)
-        if node.type == 'tag_setting':
-            for n in node.children:
-                if n.type == 'tag':
-                    self.tag_set[self.text(n)].append(n.start_point[0]+1)
-        elif node.type in ['tag_filter', 'tag_distribution']:
-            for n in node.children:
-                if n.type == 'tag':
-                    self.tag_use[self.text(n)].append(n.start_point[0]+1)
+    def gather_tags(self):
+        pars = ['tag_setting', 'tag_filter', 'tag_distribution']
+        for node in self.iter_children(self.tree.root_node, pars):
+            dct = self.tag_set if node.type == 'tag_setting' else self.tag_use
+            for ch in node.children:
+                if ch.type == 'tag':
+                    dct[self.text(ch)].append(ch.start_point[0]+1)
     def check_tags(self):
         self.tag_set = defaultdict(list)
         self.tag_use = defaultdict(list)
-        self.gather_tags(self.tree.root_node)
+        self.gather_tags()
         for tg, lines in self.tag_set.items():
             if tg in self.tag_use:
                 continue
@@ -144,11 +140,5 @@ class LexdLinter(FileLinter):
                 for line in block.children:
                     if line.type == 'pattern_line':
                         self.examine_pattern_line(line)
-    def load(self):
-        self.parser = Parser()
-        self.parser.set_language(LEXD_LANGUAGE)
-        with open(self.path, 'rb') as fin:
-            self.content = fin.read()
-        self.tree = self.parser.parse(self.content)
 
 FileLinter.register(LexdLinter, ext='lexd')

@@ -9,7 +9,10 @@ except ImportError:
     print('WARNING: lxml is required to run XML linters')
 
 try:
+    import linters.tree_sitter.cg
     import linters.tree_sitter.lexd
+    import linters.tree_sitter.rtx
+    import linters.tree_sitter.twolc
 except ImportError:
     print('WARNING: tree-sitter is required to run some linters')
 

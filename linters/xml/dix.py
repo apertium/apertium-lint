@@ -187,8 +187,13 @@ class MonoDixLinter(DixLinter):
             self.record(self.space_left[''][idx][0], Verbosity.Error, 'Entry can begin with a space on the left side.')
         for idx, ct in rs:
             self.record(self.space_right[''][idx][0], Verbosity.Error, 'Entry can begin with a space on the right side.')
+    def stat_stems(self):
+        self.record_stat('stems', len(self.tree.findall("section/*[@lm]")))
 
-# TODO: when we have a bidix linter, register it with
-# re.compile(r'^apertium-\w+-\w+.\w+-\w+.dix$')
-# then, on a later line, register monodix with /.*\.dix/
-FileLinter.register(MonoDixLinter, ext='dix')
+class BiDixLinter(DixLinter):
+    stat_labels = {}
+    def stat_stems(self):
+        self.record_stat('stems', len(self.tree.findall("*[@id='main']/e//l")))
+
+FileLinter.register(BiDixLinter, regexs=[r'^apertium-\w+-\w+.\w+-\w+.dix$'])
+FileLinter.register(MonoDixLinter, regexs=[r'.*\.dix$'])
