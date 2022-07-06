@@ -11,6 +11,7 @@ except ImportError:
 
 try:
     import linters.tree_sitter.cg
+    import linters.tree_sitter.lexc
     import linters.tree_sitter.lexd
     import linters.tree_sitter.rtx
     import linters.tree_sitter.twolc
