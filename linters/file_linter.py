@@ -8,7 +8,8 @@ from unicodedata import normalize
 class Verbosity:
     Error = 1
     Warn = 2
-    Nitpick = 3
+    Suggestion = 3
+    Nitpick = 4
 
 class FileLinter:
     Extensions = {} # str:class

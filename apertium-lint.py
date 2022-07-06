@@ -4,6 +4,7 @@ from linters import file_linter
 
 try:
     import linters.xml.dix
+    import linters.xml.lrx
     import linters.xml.transfer
 except ImportError:
     print('WARNING: lxml is required to run XML linters')
