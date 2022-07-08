@@ -80,6 +80,8 @@ class FileLinter:
             for num, line in enumerate(txt.splitlines(), 1):
                 if normalize('NFC', line) != line:
                     self.record(num, Verbosity.Warn, 'Line contains non-normalized characters.')
+                if ' ' in line:
+                    self.record(num, Verbosity.Warn, 'Line contains non-breaking space.')
     def load(self):
         pass
     def lint(path, extension='', check=True, stats=False):
