@@ -77,7 +77,10 @@ class FileLinter:
                 txt = fin.read().decode('utf-8')
             except UnicodeDecodeError:
                 return
-            for num, line in enumerate(txt.splitlines(), 1):
+            lines = txt.splitlines()
+            if txt and not txt.endswith('\n'):
+                self.record(len(lines), Verbosity.Error, 'Missing trailing newline.')
+            for num, line in enumerate(lines, 1):
                 if normalize('NFC', line) != line:
                     self.record(num, Verbosity.Warn, 'Line contains non-normalized characters.')
                 if ' ' in line:
