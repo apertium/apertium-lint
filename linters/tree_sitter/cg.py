@@ -2,17 +2,17 @@
 
 from ..file_linter import FileLinter, Verbosity
 from .tree_sitter_linter import TreeSitterLinter
-from .tree_sitter_langs import CG_LANGUAGE
+import tree_sitter_apertium
 from collections import defaultdict
 
 class CGLinter(TreeSitterLinter):
-    language = CG_LANGUAGE
+    language = tree_sitter_apertium.CG
     stat_labels = {
         'rules': 'Rules',
     }
     def stat_rules(self):
         self.record_stat('rules',
-                         sum(1 for n in self.tree.root_node.children
+                         sum(1 for n in self.tree.children
                              if n.type.startswith('rule')))
 
 FileLinter.register(CGLinter, ext='rlx')

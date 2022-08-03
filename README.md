@@ -16,9 +16,7 @@ linter for Apertium source files
 # Dependencies
 
 ```bash
-git submodule init
-git submodule update --recursive
-pip3 install tree_sitter lxml
+pip3 install tree_sitter lxml tree-sitter-apertium
 ```
 
 # Example usage
