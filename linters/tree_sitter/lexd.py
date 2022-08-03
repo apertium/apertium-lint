@@ -2,11 +2,11 @@
 
 from ..file_linter import FileLinter, Verbosity
 from .tree_sitter_linter import TreeSitterLinter
-from .tree_sitter_langs import LEXD_LANGUAGE
+import tree_sitter_apertium as TSA
 from collections import defaultdict
 
 class LexdLinter(TreeSitterLinter):
-    language = LEXD_LANGUAGE
+    language = TSA.LEXD
     stat_labels = {
         'lex_entries': 'Lexicon entries',
         'pat_entries': 'Pattern lines',
@@ -44,7 +44,7 @@ class LexdLinter(TreeSitterLinter):
                     return (self.text(n.children[0]),
                             self.get_side(tok, 'lexicon_reference'))
     def examine_pattern_line(self, line):
-        line_number = line.start_point[0]+1
+        line_number = TSA.line(line)
         toks = [] # (name, side)
         for tok in line.children:
             c = self.classify_pattern_token(tok)
@@ -103,7 +103,7 @@ class LexdLinter(TreeSitterLinter):
                 return
     def gather_tags(self):
         pars = ['tag_setting', 'tag_filter', 'tag_distribution']
-        for node in self.iter_children(self.tree.root_node, pars):
+        for node in self.iter_children(self.tree, pars):
             dct = self.tag_set if node.type == 'tag_setting' else self.tag_use
             for ch in node.children:
                 if ch.type == 'tag':
@@ -124,7 +124,7 @@ class LexdLinter(TreeSitterLinter):
                 self.record(ln, Verbosity.Warn, f'Tag {tg} used in filter but never set.')
     def stat_all(self, node=None, name=''):
         if node == None:
-            node = self.tree.root_node
+            node = self.tree
         if node.type == 'lexicon_line':
             self.record_stat(('lex_entries', name), inc=1)
         elif node.type == 'pattern_line':
@@ -135,7 +135,7 @@ class LexdLinter(TreeSitterLinter):
                 n = self.text(ch)
             self.stat_all(ch, n)
     def check_patterns(self):
-        for block in self.tree.root_node.children:
+        for block in self.tree.children:
             if block.type == 'pattern_block':
                 for line in block.children:
                     if line.type == 'pattern_line':

@@ -2,16 +2,17 @@
 
 from ..file_linter import FileLinter, Verbosity
 from .tree_sitter_linter import TreeSitterLinter
-from .tree_sitter_langs import LEXC_LANGUAGE
+import tree_sitter_apertium as TSA
 from collections import defaultdict
 
 class LexCLinter(TreeSitterLinter):
-    language = LEXC_LANGUAGE
+    language = TSA.LEXC
     stat_labels = {}
-    def process_lexicon_line(self, lex, line, com):
+    def process_lexicon_line(self, lex, line):
         l = ''
         r = ''
-        gloss = com.strip('!').strip()
+        com = TSA.end_comment(line)
+        gloss = self.text(com).strip('!').strip() if com else ''
         cont = None
         for ch in line.children:
             if ch.type == 'lexicon_name':
@@ -30,28 +31,20 @@ class LexCLinter(TreeSitterLinter):
             self.entries[lex].add((l, r, gloss, cont))
         elif cont:
             self.plain_continue[lex].add(cont)
-    def process_lexicon(self, lex, trailing_comment):
+    def process_lexicon(self, lex):
         name = ''
         for i, line in enumerate(lex.children):
-            com = ''
-            if i+1 < len(lex.children) and lex.children[i+1].type == 'comment':
-                com = self.text(lex.children[i+1])
-            elif trailing_comment and trailing_comment.start_point == line.start_point:
-                com = self.text(trailing_comment)
             if line.type == 'lexicon_name':
                 name = self.text(line)
             elif line.type == 'empty_lexicon_line':
                 self.plain_continue[name].add(self.text(line.children[0]))
             elif line.type == 'lexicon_line':
-                self.process_lexicon_line(name, line, com)
+                self.process_lexicon_line(name, line)
     def collect_stems(self):
         self.plain_continue = defaultdict(set)
         self.entries = defaultdict(set)
-        nodes = self.tree.root_node.children
+        nodes = self.tree.children
         for i, lex in enumerate(nodes):
-            com = None
-            if i+1 < len(nodes) and nodes[i+1].type == 'comment':
-                com = nodes[i+1]
             if lex.type == 'lexicon':
                 self.process_lexicon(lex, com)
     def stat_stems(self):
@@ -80,7 +73,7 @@ class LexCLinter(TreeSitterLinter):
         self.record_stat('stem_cont_vanilla', len(lemma_cont_no_mt))
     def stat_entries(self):
         total = 0
-        for lex in self.tree.root_node.children:
+        for lex in self.tree.children:
             n = 0
             name = ''
             for ln in lex.children:
