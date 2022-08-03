@@ -17,13 +17,13 @@ class TwolCLinter(TreeSitterLinter):
     def read_alphabet(self):
         if hasattr(self, 'symbols'):
             return
-        self.symbols = defaultdict(list)
+        self.symbols = defaultdict(dict)
         q = TSA.TWOLC.query('(alphabet [(symbol) @sym (symbol_pair) @pair])')
         captures = q.captures(self.tree)
         for node, kind in captures:
             if kind == 'sym':
                 sym = self.text(node)
-                self.symbols[sym].append(sym)
+                self.symbols[sym][sym] = TSA.line(node)
             elif kind == 'pair':
                 l = node.child_by_field_name('left')
                 r = node.child_by_field_name('right')
@@ -36,7 +36,7 @@ class TwolCLinter(TreeSitterLinter):
                     self.record(TSA.line(node), Verbosity.Warn,
                                 f'Symbol {sl}:{sr} listed multiple times')
                 else:
-                    self.symbols[sl].append(sr)
+                    self.symbols[sl][sr] = TSA.line(node)
     def read_sets(self):
         if hasattr(self, 'sets'):
             return
@@ -58,7 +58,7 @@ class TwolCLinter(TreeSitterLinter):
         out_syms = set()
         spair = 0
         for l in self.symbols.values():
-            out_syms.update(l)
+            out_syms.update(l.keys())
             spair += len(l)
         sout = len(out_syms)
         if '0' in out_syms:
@@ -94,7 +94,7 @@ class TwolCLinter(TreeSitterLinter):
     def pre_rule__gather_symbols(self):
         self.read_alphabet()
         self.read_sets()
-        self.used_symbols = defaultdict(set)
+        self.used_symbols = defaultdict(dict)
     def per_rule__undefined_symbols(self, rule):
         target = rule.child_by_field_name('target')
         l, r = self.symbol_to_pair(target)
@@ -140,21 +140,19 @@ class TwolCLinter(TreeSitterLinter):
             if r not in self.symbols[l]:
                 msg = f'Symbol pair {l}:{r} not listed in alphabet'
                 self.record(TSA.line(target), Verbosity.Warn, msg)
-            self.used_symbols[l].add(r)
+            self.used_symbols[l][r] = TSA.line(rule)
     def post_rule__uncontrolled_symbols(self):
         for k in self.symbols:
-            sdef = set(self.symbols[k])
-            suse = self.used_symbols[k]
-            uncon = sdef - suse
+            sdef = set(self.symbols[k].keys())
+            suse = set(self.used_symbols[k].keys())
+            uncon = list(sorted(sdef - suse))
             if len(uncon) > 1:
-                s = ' '.join(sorted(uncon))
-                # TODO: is there a better loc for this?
-                self.record(1, Verbosity.Warn,
+                s = ' '.join(uncon)
+                self.record(self.symbols[k][uncon[0]], Verbosity.Warn,
                             f'Symbol {k} has multiple unconstrained realizations ({s})')
             if len(sdef) == 1 and sdef == suse:
                 s = list(sdef)[0]
-                # TODO: this definitely has a right location
-                self.record(1, Verbosity.Suggestion,
+                self.record(self.used_symbols[k][s], Verbosity.Suggestion,
                             f'Symbol {k} has only 1 realization ({s}), so constraining it with a rule is unnecesary')
 
 FileLinter.register(TwolCLinter, ext=['twol', 'twoc', 'twolc'])
