@@ -7,7 +7,8 @@ from collections import defaultdict
 
 class RTXLinter(TreeSitterLinter):
     language = TSA.RTX
-    stat_labels = {
+    Extensions = ['rtx']
+    StatLabels = {
         'out_rules': 'Output rules',
         'retag_rules': 'Rewrite rules',
         'macros': 'Macros',
@@ -22,5 +23,3 @@ class RTXLinter(TreeSitterLinter):
                 self.record_stat('macros', inc=1)
         self.count_node('reduce_rules', 'reduce_rule')
         self.count_node('retag_rules', 'retag_rule')
-
-FileLinter.register(RTXLinter, ext='rtx')

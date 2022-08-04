@@ -5,7 +5,10 @@ from .xml import XmlLinter
 from collections import defaultdict
 
 class TransferLinter(XmlLinter):
-    stat_labels = {}
+    Extensions = ['t1x', 't2x', 't3x', 't4x']
+    ReportTypes = {
+        'wrong-arg-count': (Verbosity.Error, 'Macro {0} called with {1} arguments but defined with {2}.'),
+    }
     def stat_rules(self):
         self.record_child_count(('rules'), self.tree, 'rule')
         self.record_child_count(('macros'), self.tree, 'def-macro')
@@ -22,9 +25,9 @@ class TransferLinter(XmlLinter):
                 macref[n].append(mac.sourceline)
                 carg = self.get_child_count(mac, 'with-param')
                 if carg != macarg[n]:
-                    self.record(mac.sourceline, Verbosity.Error, f'Macro {n} called with {carg} arguments but defined with {macarg[n]}.')
+                    self.record('wrong-arg-count', mac, n, carg, macarg[n])
             else:
-                self.record(mac.sourceline, Verbosity.Error, f'Macro {n} called but not defined.')
+                self.record('undef', mac, 'Macro', n)
         for mac in macdef:
             if mac not in macref or not macref[mac]:
-                self.record(macdef[mac], Verbosity.Warn, f'Macro {mac} defined but not used.')
+                self.record('unuse', macdef[mac], 'Macro', mac)

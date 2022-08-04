@@ -7,12 +7,11 @@ from collections import defaultdict
 
 class CGLinter(TreeSitterLinter):
     language = tree_sitter_apertium.CG
-    stat_labels = {
+    Extensions = ['rlx']
+    StatLabels = {
         'rules': 'Rules',
     }
     def stat_rules(self):
         self.record_stat('rules',
                          sum(1 for n in self.tree.children
                              if n.type.startswith('rule')))
-
-FileLinter.register(CGLinter, ext='rlx')
