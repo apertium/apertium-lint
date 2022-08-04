@@ -7,11 +7,19 @@ from collections import defaultdict
 
 class LexdLinter(TreeSitterLinter):
     language = TSA.LEXD
-    stat_labels = {
+    Extensions = ['lexd']
+    StatLabels = {
         'lex_entries': 'Lexicon entries',
         'pat_entries': 'Pattern lines',
         ('lex_entries', ''): 'All anonymous lexicons',
         ('pat_entries', ''): 'Toplevel pattern'
+    }
+    ReportTypes = {
+        'adj-tok-merge': (Verbosity.Warn, 'References to {0} can be merged, decreasing the number of paired tokens.'),
+        'tok-merge': (Verbosity.Warn, 'Line can be rearranged so as to merge references to {0}, decreasing the number of paired tokens.'),
+        'partition': (Verbosity.Warn, 'Line can be partitioned into sub-patterns to decrease the number of overlapping sets of paired tokens.\n{0}\n  Possible partition point'),
+        'tag-unuse': (Verbosity.Warn, 'Tag {0} set but never used in a filter.'),
+        'tag-unset': (Verbosity.Warn, 'Tag {0} used in a filter but never set.'),
     }
     def get_side(self, node, count_type):
         parts = ''
@@ -68,14 +76,14 @@ class LexdLinter(TreeSitterLinter):
                 if (toks[l1][1] == 'left' and toks[l2][1] == 'right') or \
                    (toks[l1][1] == 'right' and toks[l2][1] == 'left'):
                     if l2 == l1 + 1:
-                        self.record(line_number, Verbosity.Warn, f'References to {name} can be merged, decreasing the number of paired tokens.')
+                        self.record('adj-tok-merge', line_number, name)
                         handled.append(name)
                         continue
                     for i in range(l1+1,l2):
                         if toks[i][1] == 'both':
                             break
                     else:
-                        self.record(line_number, Verbosity.Warn, f'Line can be rearranged so as to merge references to {name}, decreasing the number of paired tokens.')
+                        self.record('tok-merge', line_number, name)
                         handled.append(name)
                         continue
         todo = [n for n in matched_names if n not in handled]
@@ -94,12 +102,11 @@ class LexdLinter(TreeSitterLinter):
             if failed:
                 continue
             if len(left) > 0 and len(right) > 0:
-                msg = 'Line can be partitioned into sub-patterns to decrease the number of overlapping sets of paired tokens.\n'
-                msg += self.text(line).rstrip() + '\n'
+                msg = self.text(line).rstrip() + '\n'
                 msg += ' ' * (line.children[i].end_byte - line.start_byte)
                 # TODO: this doesn't properly account for diacritics etc
-                msg += '^\n  Possible partition point'
-                self.record(line_number, Verbosity.Warn, msg)
+                msg += '^'
+                self.record('partition', line_number, msg)
                 return
     def gather_tags(self):
         pars = ['tag_setting', 'tag_filter', 'tag_distribution']
@@ -116,12 +123,12 @@ class LexdLinter(TreeSitterLinter):
             if tg in self.tag_use:
                 continue
             for ln in lines:
-                self.record(ln, Verbosity.Warn, f'Tag {tg} set but never used in a filter.')
+                self.record('tag-unuse', ln, tg)
         for tg, lines in self.tag_use.items():
             if tg in self.tag_set:
                 continue
             for ln in lines:
-                self.record(ln, Verbosity.Warn, f'Tag {tg} used in filter but never set.')
+                self.record('tag-unset', ln, tg)
     def stat_all(self, node=None, name=''):
         if node == None:
             node = self.tree
@@ -140,5 +147,3 @@ class LexdLinter(TreeSitterLinter):
                 for line in block.children:
                     if line.type == 'pattern_line':
                         self.examine_pattern_line(line)
-
-FileLinter.register(LexdLinter, ext='lexd')

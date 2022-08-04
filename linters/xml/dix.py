@@ -5,9 +5,11 @@ from .xml import XmlLinter
 from collections import defaultdict
 
 class DixLinter(XmlLinter):
-    stat_labels = {}
     nodes_with_text = ['i', 'l', 'r', 'g', 'ig']
     nodes_in_text = ['a', 'b', 'm', 'g', 'j', 's']
+    ReportTypes = {
+        'LitSpace': (Verbosity.Warn, 'Spaces in entries should be written with <b/>.')
+    }
     def collect_child_strings(self, node, nonempty=False):
         ret = []
         l = ''
@@ -35,13 +37,12 @@ class DixLinter(XmlLinter):
             ret.append(('', '', ''))
         return ret
     def collect_strings(self, node): # -> (L, R, par)
-        space_warn = 'Spaces in entries should be written with <b/>.'
         if node.tag in self.nodes_with_text:
             if node.text and ' ' in node.text:
-                self.record(node.sourceline, Verbosity.Warn, space_warn)
+                self.record('LitSpace', node)
         elif node.tag in self.nodes_in_text:
             if node.tail and ' ' in node.tail:
-                self.record(node.sourceline, Verbosity.Warn, space_warn)
+                self.record('LitSpace', node)
         if node.tag == 'a':
             return ('~', '~', '')
         elif node.tag == 'b':
@@ -83,13 +84,22 @@ class DixLinter(XmlLinter):
         for p in sorted(pref.keys()):
             if p not in pdef:
                 for ln in pref[p]:
-                    self.record(ln, Verbosity.Error, f'Pardef {p} referred to but not defined.')
+                    self.record('undef', ln, 'Pardef', p)
         for p in sorted(pdef.keys()):
             if p not in pref:
-                self.record(pdef[p], Verbosity.Warn, f'Pardef {p} defined but not used.')
+                self.record('unuse', pdef[p], 'Pardef', p)
+
+class BiDixLinter(DixLinter):
+    Identifiers = [r'^apertium-\w+-\w+.\w+-\w+.dix$']
+    def stat_stems(self):
+        self.record_stat('stems', len(self.tree.findall("*[@id='main']/e//l")))
 
 class MonoDixLinter(DixLinter):
-    stat_labels = {}
+    Identifiers = [r'.*\.dix$']
+    ReportTypes = {
+        'maybeempty': (Verbosity.Error, 'Entry can be empty on {0} side.'),
+        'initspace': (Verbosity.Error, 'Entry can begin with a space on the {0} side.'),
+    }
     def space_blank_entry(self, ent):
         strs = self.collect_child_strings(ent)
         parname = ''
@@ -177,23 +187,15 @@ class MonoDixLinter(DixLinter):
         self.really_blank = defaultdict(list)
         le, re = self.can_be_empty('')
         for idx in le:
-            self.record(self.blank_left[''][idx][0], Verbosity.Error, 'Entry can be empty on the left side.')
+            self.record('maybeempty', self.blank_left[''][idx][0], 'left')
         for idx in re:
-            self.record(self.blank_right[''][idx][0], Verbosity.Error, 'Entry can be empty on the right side.')
+            self.record('maybeempty', self.blank_right[''][idx][0], 'right')
 
         self.really_space = defaultdict(list)
         ls, rs = self.can_be_space('')
         for idx, ct in ls:
-            self.record(self.space_left[''][idx][0], Verbosity.Error, 'Entry can begin with a space on the left side.')
+            self.record('initspace', self.space_left[''][idx][0], 'left')
         for idx, ct in rs:
-            self.record(self.space_right[''][idx][0], Verbosity.Error, 'Entry can begin with a space on the right side.')
+            self.record('initspace', self.space_right[''][idx][0], 'right')
     def stat_stems(self):
         self.record_stat('stems', len(self.tree.findall("section/*[@lm]")))
-
-class BiDixLinter(DixLinter):
-    stat_labels = {}
-    def stat_stems(self):
-        self.record_stat('stems', len(self.tree.findall("*[@id='main']/e//l")))
-
-FileLinter.register(BiDixLinter, regexs=[r'^apertium-\w+-\w+.\w+-\w+.dix$'])
-FileLinter.register(MonoDixLinter, regexs=[r'.*\.dix$'])

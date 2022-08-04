@@ -7,7 +7,13 @@ from collections import defaultdict
 
 class LexCLinter(TreeSitterLinter):
     language = TSA.LEXC
-    stat_labels = {}
+    Extensions = ['lexc']
+    ReportTypes = {
+        'wrong-paren': (Verbosity.Warn, '() means optional in XFST, did you mean []+ ?'),
+        'multichar-redef': (Verbosity.Warn, 'Multichar symbol {0} defined multiple times.'),
+        'undef-tag': (Verbosity.Error, 'Undefined tag {0}.'),
+        'undef-archi': (Verbosity.Error, 'Undefined archiphoneme {0}'),
+    }
     def process_lexicon_line(self, lex, line):
         l = ''
         r = ''
@@ -87,8 +93,7 @@ class LexCLinter(TreeSitterLinter):
     def check_regex(self):
         q = '(expression (expression (optional)) (plus)) @exp'
         for node, _ in self.query(q):
-            self.record(TSA.line(node), Verbosity.Warn,
-                        '() means optional in XFST, did you mean []+ ?')
+            self.record('wrong-paren', node)
     def read_alphabet(self):
         if hasattr(self, 'symbols'):
             return
@@ -96,8 +101,7 @@ class LexCLinter(TreeSitterLinter):
         for node, _ in self.query('(multichar_symbols (alphabet_symbol) @a)'):
             s = self.text(node)
             if s in self.symbols:
-                self.record(TSA.line(node), Verbosity.Warn,
-                            f'Multichar symbols {s} defined multiple times')
+                self.record('multichar-redef', node, s)
             else:
                 self.symbols[s] = TSA.line(node)
     def pre_lexicon_string__symbols(self):
@@ -115,16 +119,12 @@ class LexCLinter(TreeSitterLinter):
                     if t.startswith('%<') and '>' in t:
                         s, t = t.split('>', 1)
                         s += '>'
-                        self.record(TSA.line(lexstr), Verbosity.Error,
-                                    f'Undefined tag {s}')
+                        self.record('undef-tag', lexstr, s)
                     elif t.startswith('%{') and '}' in t:
                         s, t = t.split('}', 1)
                         s += '}'
-                        self.record(TSA.line(lexstr), Verbosity.Error,
-                                    f'Undefined archiphoneme {s}')
+                        self.record('undef-archi', lexstr, s)
                     else:
                         t = t[2:]
                 else:
                     t = t[1:]
-
-FileLinter.register(LexCLinter, ext='lexc')
