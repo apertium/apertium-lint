@@ -26,13 +26,67 @@ class BaseFileLinter:
 
     def __init__(self, path):
         self.path = path
-        self.reports = [] # (line, level, text)
+        self.reports = [] # (line, level, key, text)
         self.statistics = defaultdict(lambda: 0)
     def load(self):
         return True
     def record(self, key, line, *args):
         level, fs = self.ReportTypes[key]
-        self.reports.append((line, level, fs.format(*args)))
+        self.reports.append((line, level, key, fs.format(*args)))
+    def get_stat(self, key):
+        if isinstance(key, str):
+            return self.statistics[key]
+        else:
+            dct = self.statistics
+            for k in key:
+                if k in dct:
+                    dct = dct[k]
+                else:
+                    return 0
+            return dct
+    def set_stat(self, key, val):
+        if isinstance(key, str):
+            self.statistics[key] = val
+        else:
+            dct = self.statistics
+            for i, k in enumerate(key):
+                if i == len(key) - 1:
+                    dct[k] = val
+                elif k in dct:
+                    dct = dct[k]
+                else:
+                    dct[k] = defaultdict(lambda: 0)
+                    dct = dct[k]
+    def record_stat(self, key, val=None, inc=None):
+        cur = self.get_stat(key)
+        if val != None:
+            cur = val
+        elif inc != None:
+            cur += inc
+        self.set_stat(key, cur)
+    def __process_stats(self, dct, pth=None):
+        ret = {}
+        for k, v in dct.items():
+            key = tuple((pth or []) + [k])
+            val = v
+            if isinstance(v, dict):
+                val = self.process_stats(v, list(key))
+            sd = {
+                'name': self.StatLabels.get(key, k),
+                'value': val
+            }
+            ret[k] = sd
+        return ret
+    def get_results(self):
+        rep = []
+        for line, level, key, desc in sorted(self.reports):
+            rep.append({
+                'line': line,
+                'level': level,
+                'name': key,
+                'desc': desc,
+            })
+        return {'stats': self.__process_stats(self.statistics), 'checks': rep}
 
     def __call_all(self, ls, *args):
         for a in ls:
@@ -58,12 +112,12 @@ class MetaFileLinter(type):
         stat_methods = []
         check_methods = []
         per_methods = defaultdict(lambda: [[], [], []])
-        ext = attrs.get('Extension', [])
+        ext = attrs.get('Extensions', [])
         ident = attrs.get('Identifiers', [])
         path_ident = attrs.get('PathIdentifiers', [])
         new_attrs = attrs.copy()
         for a, v in attrs.items():
-            if a in ['Extension', 'Identifiers', 'PathIdentifiers']:
+            if a in ['Extensions', 'Identifiers', 'PathIdentifiers']:
                 del new_attrs[a]
             elif a in ['ReportTypes', 'StatLabels']:
                 dct = {}
@@ -101,7 +155,7 @@ class MetaFileLinter(type):
         for i in ident:
             BaseFileLinter.Identifiers.append((re.compile(i), ret))
         for pi in path_ident:
-            BaseFileLinter.PathIdentifiers.append((re.compile(i), ret))
+            BaseFileLinter.PathIdentifiers.append((re.compile(pi), ret))
         return ret
 
 class FileLinter(BaseFileLinter, metaclass=MetaFileLinter):
@@ -112,55 +166,6 @@ class FileLinter(BaseFileLinter, metaclass=MetaFileLinter):
         'undef': (Verbosity.Error, '{0} {1} used but not defined.'),
         'unuse': (Verbosity.Warn, '{0} {1} defined but not used.'),
     }
-    def get_stat(self, key):
-        if isinstance(key, str):
-            return self.statistics[key]
-        else:
-            dct = self.statistics
-            for k in key:
-                if k in dct:
-                    dct = dct[k]
-                else:
-                    return 0
-            return dct
-    def set_stat(self, key, val):
-        if isinstance(key, str):
-            self.statistics[key] = val
-        else:
-            dct = self.statistics
-            for i, k in enumerate(key):
-                if i == len(key) - 1:
-                    dct[k] = val
-                elif k in dct:
-                    dct = dct[k]
-                else:
-                    dct[k] = defaultdict(lambda: 0)
-                    dct = dct[k]
-    def record_stat(self, key, val=None, inc=None):
-        cur = self.get_stat(key)
-        if val != None:
-            cur = val
-        elif inc != None:
-            cur += inc
-        self.set_stat(key, cur)
-    def report(self, verbosity=Verbosity.Warn, color=False):
-        for line, level, text in self.reports:
-            if level <= verbosity:
-                print(f'{self.path} Line {line}')
-                print(text)
-    def report_stats(self, color=False):
-        def disp_dict(dct, prefix):
-            ind = '  '*len(prefix)
-            for k in sorted(dct.keys()):
-                name = k
-                sk = tuple(prefix + [k]) if prefix else k
-                name = self.__class__.StatLabels.get(sk, name)
-                if isinstance(dct[k], int):
-                    print(f'{ind}{name}:\t{dct[k]}')
-                else:
-                    print(f'{ind}{name}:')
-                    disp_dict(dct[k], prefix + [k])
-        disp_dict(self.statistics, [])
     def check_encoding(self):
         with open(self.path, 'rb') as fin:
             try:
@@ -175,33 +180,6 @@ class FileLinter(BaseFileLinter, metaclass=MetaFileLinter):
                     self.record('unnorm', num)
                 if ' ' in line:
                     self.record('NBSP', num)
-    def identify(path, extension):
-        if extension in BaseFileLinter.Extensions:
-            return BaseFileLinter.Extensions[extension]
-        filename = os.path.basename(path)
-        ext = os.path.splitext(filename)[1].lstrip('.')
-        if ext in BaseFileLinter.Extensions:
-            return BaseFileLinter.Extensions[ext]
-        for r, c in BaseFileLinter.PathIdentifiers:
-            if r.search(path):
-                return c
-        for r, c in BaseFileLinter.Identifiers:
-            if r.match(filename):
-                return c
-        return FileLinter
-    def lint(path, extension='', check=True, stats=False):
-        cls = FileLinter.identify(path, extension)
-        ret = cls(path)
-        loaded = ret.load()
-        if not loaded:
-            return ret
-        if check and stats:
-            ret.run_statcheck()
-        elif check:
-            ret.run_check()
-        elif stats:
-            ret.run_stats()
-        return ret
 
 class SkipLinting(FileLinter):
     Extensions = [
@@ -221,14 +199,43 @@ class SkipLinting(FileLinter):
         r'.*~', r'\.DS_Store',
     ]
     PathIdentifiers = [
-        r'/modes/',
-        r'/autom4te\.cache/',
+        r'(/|^)modes/',
+        r'(/|^)autom4te\.cache/',
         # generated test files
-        r'/test/(expected|output|gold)/',
-        r'/test/.*-(expected|output|gold)\.txt$',
-        r'/test/error\.log$',
+        r'(/|^)test/(expected|output|gold)/',
+        r'(/|^)test/.*-(expected|output|gold)\.txt$',
+        r'(/|^)test/error\.log$',
         # non-standardized subdirs
-        r'/(corpus|texts|dev)/',
+        r'(/|^)(corpus|texts|dev)/',
     ]
     def load(self):
         return False
+
+def identify(path, extension):
+    if extension in BaseFileLinter.Extensions:
+        return BaseFileLinter.Extensions[extension]
+    filename = os.path.basename(path)
+    ext = os.path.splitext(filename)[1].lstrip('.')
+    if ext in BaseFileLinter.Extensions:
+        return BaseFileLinter.Extensions[ext]
+    for r, c in BaseFileLinter.PathIdentifiers:
+        if r.search(path):
+            return c
+    for r, c in BaseFileLinter.Identifiers:
+        if r.match(filename):
+            return c
+    return FileLinter
+
+def lint(path, extension='', check=True, stats=False):
+    cls = identify(path, extension)
+    ret = cls(path)
+    loaded = ret.load()
+    if not loaded:
+        return ret
+    if check and stats:
+        ret.run_statcheck()
+    elif check:
+        ret.run_check()
+    elif stats:
+        ret.run_stats()
+    return ret
