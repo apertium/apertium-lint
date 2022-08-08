@@ -108,27 +108,16 @@ class LexdLinter(TreeSitterLinter):
                 msg += '^'
                 self.record('partition', line_number, msg)
                 return
-    def gather_tags(self):
-        pars = ['tag_setting', 'tag_filter', 'tag_distribution']
-        for node in self.iter_children(self.tree, pars):
-            dct = self.tag_set if node.type == 'tag_setting' else self.tag_use
-            for ch in node.children:
-                if ch.type == 'tag':
-                    dct[self.text(ch)].append(ch.start_point[0]+1)
     def check_tags(self):
-        self.tag_set = defaultdict(list)
-        self.tag_use = defaultdict(list)
-        self.gather_tags()
-        for tg, lines in self.tag_set.items():
-            if tg in self.tag_use:
-                continue
-            for ln in lines:
-                self.record('tag-unuse', ln, tg)
-        for tg, lines in self.tag_use.items():
-            if tg in self.tag_set:
-                continue
-            for ln in lines:
-                self.record('tag-unset', ln, tg)
+        tag_set = defaultdict(list)
+        tag_use = defaultdict(list)
+        qr = '[(tag_setting) @set (tag_filter) @use (tag_distribution) @use]'
+        for node, mode in self.query(qr):
+            dct = tag_set if mode == 'set' else tag_use
+            for tg in self.all_labels('tag', node):
+                dct[tg].append(TSA.line(node))
+        self.warn_def_use(tag_set, tag_use, 'tag-unuse')
+        self.warn_def_use(tag_use, tag_set, 'tag-unset')
     def stat_all(self, node=None, name=''):
         if node == None:
             node = self.tree
@@ -142,8 +131,5 @@ class LexdLinter(TreeSitterLinter):
                 n = self.text(ch)
             self.stat_all(ch, n)
     def check_patterns(self):
-        for block in self.tree.children:
-            if block.type == 'pattern_block':
-                for line in block.children:
-                    if line.type == 'pattern_line':
-                        self.examine_pattern_line(line)
+        for line in self.iter_type('pattern_line'):
+            self.examine_pattern_line(line)

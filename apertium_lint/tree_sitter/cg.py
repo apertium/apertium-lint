@@ -2,16 +2,28 @@
 
 from ..file_linter import FileLinter, Verbosity
 from .tree_sitter_linter import TreeSitterLinter
-import tree_sitter_apertium
+import tree_sitter_apertium as TSA
 from collections import defaultdict
 
 class CGLinter(TreeSitterLinter):
-    language = tree_sitter_apertium.CG
+    language = TSA.CG
     Extensions = ['rlx']
     StatLabels = {
         'rules': 'Rules',
+    }
+    ReportTypes = {
+        'redef-set': (Verbosity.Error, 'Redefinition of set {0}.'),
+        'undef-set': (Verbosity.Error, 'Set {0} used but not defined.'),
+        'unuse-set': (Verbosity.Warn, 'Set {0} defined but not used.'),
     }
     def stat_rules(self):
         self.record_stat('rules',
                          sum(1 for n in self.tree.children
                              if n.type.startswith('rule')))
+    def check_setnames(self):
+        qr = '[(set name: (setname) @n) (list name: (setname) @n)]'
+        sdef = self.gather_lines(qr, 'redef-set')
+        qr = '[(inlineset_single (setname) @n) (setname_t) @n]'
+        suse = self.gather_lines(qr)
+        self.warn_def_use(sdef, suse, 'unuse-set')
+        self.warn_def_use(suse, sdef, 'undef-set')

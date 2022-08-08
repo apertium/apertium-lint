@@ -180,6 +180,19 @@ class FileLinter(BaseFileLinter, metaclass=MetaFileLinter):
                     self.record('unnorm', num)
                 if ' ' in line:
                     self.record('NBSP', num)
+    def warn_def_use(self, check_dict, ref_dict, err):
+        '''
+        Given check_dict of the form {label:line} or {label:[line1, line2]}
+        and ref_dict of the same form, call
+        self.record(err, line, label) for every label not in ref_dict
+        '''
+        for lab, lines in check_dict.items():
+            if lab not in ref_dict:
+                ls = lines
+                if not isinstance(ls, list):
+                    ls = [ls]
+                for ln in ls:
+                    self.record(err, ln, lab)
 
 class SkipLinting(FileLinter):
     Extensions = [
