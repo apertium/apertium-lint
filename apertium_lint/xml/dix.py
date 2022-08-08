@@ -211,6 +211,8 @@ class MonoDixLinter(DixLinter):
                 continue
             if entry[0].tag != 'i' or entry[1].tag != 'par':
                 continue
+            if len(entry[0]) != 0:
+                continue
             lm = entry.attrib['lm']
             stem = entry[0].text or ''
             par = entry[1].attrib.get('n', '')
