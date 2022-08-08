@@ -3,7 +3,7 @@
 from .file_linter import lint
 
 try:
-    from .xml import dix, lrx, transfer
+    from .xml import dix, lrx, modes, transfer
 except ImportError:
     print('WARNING: lxml is required to run XML linters')
 

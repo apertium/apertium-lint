@@ -3,6 +3,7 @@
 from ..file_linter import FileLinter, Verbosity
 from .xml import XmlLinter
 from collections import defaultdict
+import re
 
 class DixLinter(XmlLinter):
     nodes_with_text = ['i', 'l', 'r', 'g', 'ig']
@@ -99,6 +100,9 @@ class MonoDixLinter(DixLinter):
     ReportTypes = {
         'maybeempty': (Verbosity.Error, 'Entry can be empty on {0} side.'),
         'initspace': (Verbosity.Error, 'Entry can begin with a space on the {0} side.'),
+        'lemma-is-stem': (Verbosity.Warn, 'Paradigm name indicates a suffix, but lemma matches stem. lm: {0} stem: {1} par: {2}'),
+        'wrong-stem': (Verbosity.Warn, 'Stem is "{0}", but based on paradigm name, should be "{1}". lm: {2} stem: {3} par: {4}'),
+        'repeat-entry': (Verbosity.Warn, 'Stem "{0}" appears more than once with paradigm {1}. First use on line {2}.'),
     }
     def space_blank_entry(self, ent):
         strs = self.collect_child_strings(ent)
@@ -199,3 +203,27 @@ class MonoDixLinter(DixLinter):
             self.record('initspace', self.space_right[''][idx][0], 'right')
     def stat_stems(self):
         self.record_stat('stems', len(self.tree.findall("section/*[@lm]")))
+    def check_par_names(self):
+        parname = re.compile(r'(.*)/(.+)__(.+)')
+        ent_list = defaultdict(lambda: defaultdict(list))
+        for entry in self.tree.findall('section/e[@lm]'):
+            if len(entry) != 2:
+                continue
+            if entry[0].tag != 'i' or entry[1].tag != 'par':
+                continue
+            lm = entry.attrib['lm']
+            stem = entry[0].text or ''
+            par = entry[1].attrib.get('n', '')
+            ent_list[stem][par].append(entry.sourceline)
+            if len(ent_list[stem][par]) > 1:
+                self.record('repeat-entry', entry, stem, par, ent_list[stem][par][0])
+            if ' ' in lm or ' ' in par:
+                continue
+            m = parname.match(par)
+            if not m:
+                continue
+            suf = m.group(2)
+            if lm.lower() == stem.lower():
+                self.record('lemma-is-stem', entry, lm, stem, par)
+            elif lm.endswith(suf) and (stem+suf).lower() != lm.lower():
+                self.record('wrong-stem', entry, stem, lm[:-len(suf)], lm, stem, par)

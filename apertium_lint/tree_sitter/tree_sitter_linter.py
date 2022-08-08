@@ -35,6 +35,18 @@ class TreeSitterLinter(FileLinter):
     def iter_type(self, name, node=None):
         for n, _ in self.query(f'({name}) @thing', node):
             yield n
+    def all_labels(self, name, node=None):
+        for node in self.iter_type(name, node):
+            yield self.text(node)
     def record(self, key, line, *args):
         l = line if isinstance(line, int) else TSA.line(line)
         FileLinter.record(self, key, l, *args)
+    def gather_lines(self, qr, redef=None):
+        dct = defaultdict(list)
+        for node, _ in self.query(qr):
+            t = self.text(node)
+            l = TSA.line(node)
+            if redef and t in dct:
+                self.record(redef, l, t)
+            dct[t].append(l)
+        return dct
