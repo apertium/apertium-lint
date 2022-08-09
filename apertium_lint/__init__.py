@@ -14,6 +14,8 @@ except ImportError:
 
 import os
 import json
+import sys
+from collections import defaultdict
 
 def disp_dict(dct, indent=0):
     prefix = '  '*indent
@@ -46,21 +48,25 @@ def display_results(pth, args, blob):
     if args.stats:
         disp_dict(blob['stats'])
 
-def lint_file(pth, args):
+def lint_file(pth, args, totals=None):
     linter = lint(pth, check=args.check, stats=args.stats)
-    display_results(pth, args, linter.get_results())
+    res = linter.get_results()
+    display_results(pth, args, res)
+    if totals is not None:
+        for ch in res.get('checks', []):
+            totals[ch['level']] += 1
 
-def lint_path(pth, args):
+def lint_path(pth, args, totals=None):
     if os.path.isfile(pth):
-        lint_file(pth, args)
+        lint_file(pth, args, totals)
     elif os.path.isdir(pth):
         for ent in os.scandir(pth):
             if ent.name.startswith('.'):
                 continue
             if ent.is_file():
-                lint_file(ent.path, args)
+                lint_file(ent.path, args, totals)
             elif ent.is_dir():
-                lint_path(ent.path, args)
+                lint_path(ent.path, args, totals)
 
 def main():
     import argparse
@@ -69,13 +75,24 @@ def main():
     parser.add_argument('--stats', '-s', action='store_true')
     parser.add_argument('--no-check', '-C', action='store_false', dest='check')
     parser.add_argument('--json', '-j', action='store_true')
+    parser.add_argument('--max-error', action='store', type=int, default=-1,
+                        metavar='N', help='Exit with non-zero status if more than N errors found')
+    parser.add_argument('--max-warn', action='store', type=int, default=-1,
+                        metavar='N', help='Exit with non-zero status if more than N warnings or errors found')
     args = parser.parse_args()
     if args.json:
         print('{')
+    count = defaultdict(lambda: 0)
     for fname in args.filename or [os.getcwd()]:
-        lint_path(fname, args)
+        lint_path(fname, args, count)
     if args.json:
         print('"":{}\n}')
+    else:
+        print(f'Errors: {count[1]} Warnings: {count[2]} Suggestions: {count[3]} Nitpicks: {count[4]}')
+    if args.max_error >= 0 and count[1] > args.max_error:
+        sys.exit(1)
+    if args.max_warn >= 0 and count[1] + count[2] > args.max_warn:
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()
