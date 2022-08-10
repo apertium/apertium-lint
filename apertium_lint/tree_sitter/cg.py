@@ -25,5 +25,9 @@ class CGLinter(TreeSitterLinter):
         sdef = self.gather_lines(qr, 'redef-set')
         qr = '[(inlineset_single (setname) @n) (setname_t) @n]'
         suse = self.gather_lines(qr)
+        magic_sets = ['_S_DELIMITERS_', '_S_SOFT_DELIMITERS_']
+        for k in magic_sets:
+            if k in suse:
+                del suse[k]
         self.warn_def_use(sdef, suse, 'unuse-set')
         self.warn_def_use(suse, sdef, 'undef-set')
