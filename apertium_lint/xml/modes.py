@@ -39,7 +39,7 @@ class ModesLinter(XmlLinter):
             for suf, msg in sufs:
                 nm = lang + suf
                 if nm not in locs:
-                    self.record(msg, morph[mode], mode, nm)
+                    self.record(msg, locs[mode], mode, nm)
     def arg_list(self, prog_node):
         def uni_arg(s):
             if len(s) > 2 and s.startswith('-') and not s.startswith('--'):
