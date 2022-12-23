@@ -8,6 +8,7 @@ class TransferLinter(XmlLinter):
     Extensions = ['t1x', 't2x', 't3x', 't4x']
     ReportTypes = {
         'wrong-arg-count': (Verbosity.Error, 'Macro {0} called with {1} arguments but defined with {2}.'),
+        'blank-manipulation': (Verbosity.Warn, '<let> copies a blank to a variable, which can corrupt formatting.'),
     }
     def stat_rules(self):
         self.record_child_count(('rules'), self.tree, 'rule')
@@ -31,3 +32,12 @@ class TransferLinter(XmlLinter):
         for mac in macdef:
             if mac not in macref or not macref[mac]:
                 self.record('unuse', macdef[mac], 'Macro', mac)
+    def check_blank_manipulation(self):
+        '''See https://github.com/apertium/apertium/issues/117'''
+        for let in self.tree.iter('let'):
+            if len(let) != 2:
+                continue
+            if let[0].tag == 'var':
+                for b in let[1].iter('b'):
+                    self.record('blank-manipulation', let.sourceline)
+                    break
