@@ -19,6 +19,7 @@ class RTXLinter(TreeSitterLinter):
         'redef-retag': (Verbosity.Error, 'Redefinition of tag-rewrite rule from {0} to {1}. First definition on line {2}.'),
         'undef-retag': (Verbosity.Error, 'No tag-rewrite rule from {0} to {1} is defined.'),
         'unuse-retag': (Verbosity.Warn, 'Tag-rewrite rule from {0} to {1} is defined but not used.'),
+        'inconsistent-operator': (Verbosity.Warn, 'Inconsistent operator name {0}. Prior instance on line {1} has {2}.'),
     }
     def stat_rules(self):
         self.count_node('out_rules', 'output_rule')
@@ -64,3 +65,33 @@ class RTXLinter(TreeSitterLinter):
                     continue
                 for ln in ruse[(src, trg)]:
                     self.record('undef-retag', ln, src, trg)
+    def check_operators(self):
+        def get_op(opstr):
+            s = opstr.replace('_', '').replace('-', '').lower()
+            caseless = False
+            case = ['cl', 'caseless', 'fold', 'foldcase']
+            for c in case:
+                if s.endswith(c):
+                    s = s[:-len(c)]
+                    caseless = True
+            synonyms = {
+                '=': 'equal', '∈': 'in',
+                '&': 'and', '|': 'or', '~': 'not', '⌐': 'not',
+                'startswith': 'isprefix', 'beginswith': 'isprefix',
+                'startswithlist': 'hasprefix', 'beginswithlist': 'hasprefix',
+                'endwith': 'issuffix', 'endswithlist': 'hassuffix',
+                'issubstring': 'contains'
+            }
+            s = synonyms.get(s, s)
+            return s, caseless
+        opuse = defaultdict(list)
+        qr = '[(str_op) @op (and) @op (or) @op (not) @op]'
+        for node, typ in self.query(qr):
+            txt = self.text(node)
+            opuse[get_op(txt)].append((txt, TSA.line(node)))
+        for opls in opuse.values():
+            first_op = opls[0][0]
+            first_line = opls[0][1]
+            for op, ln in opls[1:]:
+                if op != first_op:
+                    self.record('inconsistent-operator', ln, op, first_line, first_op)
