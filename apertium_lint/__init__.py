@@ -22,10 +22,10 @@ def disp_dict(dct, indent=0):
     for k in sorted(dct.keys()):
         blob = dct[k]
         if isinstance(blob['value'], dict):
-            print(f'{prefix}{blob["name"]}:')
+            print(f'{prefix}{blob["long_name"]}:')
             disp_dict(blob['value'], indent+1)
         else:
-            print(f'{prefix}{blob["name"]}:\t{blob["value"]}')
+            print(f'{prefix}{blob["long_name"]}:\t{blob["value"]}')
 
 def display_results(pth, args, blob):
     if args.json:

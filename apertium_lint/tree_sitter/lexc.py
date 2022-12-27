@@ -52,7 +52,7 @@ class LexCLinter(TreeSitterLinter):
         nodes = self.tree.children
         for i, lex in enumerate(nodes):
             if lex.type == 'lexicon':
-                self.process_lexicon(lex, com)
+                self.process_lexicon(lex)
     def stat_stems(self):
         self.collect_stems()
         initial_lex = {'Root'}

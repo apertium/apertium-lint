@@ -70,9 +70,10 @@ class BaseFileLinter:
             key = tuple((pth or []) + [k])
             val = v
             if isinstance(v, dict):
-                val = self.process_stats(v, list(key))
+                val = self.__process_stats(v, list(key))
             sd = {
-                'name': self.StatLabels.get(key, k),
+                'name': k,
+                'long_name': self.StatLabels.get(key, k),
                 'value': val
             }
             ret[k] = sd
@@ -125,7 +126,16 @@ class MetaFileLinter(type):
                     if hasattr(b, a):
                         dct.update(getattr(b, a))
                 dct.update(v)
-                new_attrs[a] = dct
+                if a == 'StatLabels':
+                    dct2 = {}
+                    for k in dct:
+                        if isinstance(k, str):
+                            dct2[tuple([k])] = dct[k]
+                        else:
+                            dct2[k] = dct[k]
+                    new_attrs[a] = dct2
+                else:
+                    new_attrs[a] = dct
             elif a.startswith('stat_') and callable(v):
                 stat_methods.append(a)
             elif a.startswith('check_') and callable(v):
@@ -250,5 +260,5 @@ def lint(path, extension='', check=True, stats=False):
     elif check:
         ret.run_check()
     elif stats:
-        ret.run_stats()
+        ret.run_stat()
     return ret
