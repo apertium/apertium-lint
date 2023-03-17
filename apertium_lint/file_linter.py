@@ -144,14 +144,17 @@ class MetaFileLinter(type):
                 stat_methods.append(a)
                 check_methods.append(a)
             elif a.startswith('pre_') and callable(v):
-                name = a.split('__')[0].split('_', 1)[1]
-                per_methods[name][0].append(a)
+                method_name = a.split('__')[0].split('_', 1)[1]
+                per_methods[method_name][0].append(a)
             elif a.startswith('per_') and callable(v):
-                name = a.split('__')[0].split('_', 1)[1]
-                per_methods[name][1].append(a)
+                method_name = a.split('__')[0].split('_', 1)[1]
+                per_methods[method_name][1].append(a)
             elif a.startswith('post_') and callable(v):
-                name = a.split('__')[0].split('_', 1)[1]
-                per_methods[name][2].append(a)
+                method_name = a.split('__')[0].split('_', 1)[1]
+                per_methods[method_name][2].append(a)
+        if per_methods:
+            stat_methods.append('run_per')
+            check_methods.append('run_per')
         def nsort(ls):
             return sorted(set(ls), key=lambda x: x.split('_', 1)[1])
         new_attrs['RunStat'] = nsort(stat_methods)
