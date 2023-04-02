@@ -9,7 +9,8 @@ class DixLinter(XmlLinter):
     nodes_with_text = ['i', 'l', 'r', 'g', 'ig']
     nodes_in_text = ['a', 'b', 'm', 'g', 'j', 's']
     ReportTypes = {
-        'LitSpace': (Verbosity.Warn, 'Spaces in entries should be written with <b/>.')
+        'LitSpace': (Verbosity.Warn, 'Spaces in entries should be written with <b/>.'),
+        'OtherSpace': (Verbosity.Error, 'Entries should not contain space characters.'),
     }
     def collect_child_strings(self, node, nonempty=False):
         ret = []
@@ -41,9 +42,13 @@ class DixLinter(XmlLinter):
         if node.tag in self.nodes_with_text:
             if node.text and ' ' in node.text:
                 self.record('LitSpace', node)
+            elif any(c.isspace() for c in node.text or ''):
+                self.record('OtherSpace', node)
         elif node.tag in self.nodes_in_text:
             if node.tail and ' ' in node.tail:
                 self.record('LitSpace', node)
+            elif any(c.isspace() for c in node.tail or ''):
+                self.record('OtherSpace', node)
         if node.tag == 'a':
             return ('~', '~', '')
         elif node.tag == 'b':
