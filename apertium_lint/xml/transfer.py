@@ -9,6 +9,7 @@ class TransferLinter(XmlLinter):
     ReportTypes = {
         'wrong-arg-count': (Verbosity.Error, 'Macro {0} called with {1} arguments but defined with {2}.'),
         'blank-manipulation': (Verbosity.Warn, '<let> copies a blank to a variable, which can corrupt formatting.'),
+        'overlapping-paths': (Verbosity.Warn, 'The sequence [{0}] matches both this rule and the rule on line {1}.'),
     }
     def stat_rules(self):
         self.record_child_count(('rules'), self.tree, 'rule')
@@ -41,3 +42,33 @@ class TransferLinter(XmlLinter):
                 for b in let[1].iter('b'):
                     self.record('blank-manipulation', let.sourceline)
                     break
+    def check_blocking_rules(self):
+        cats = defaultdict(set)
+        cat_overlap = defaultdict(set)
+        for cat in self.tree.iter('def-cat'):
+            name = cat.get('n')
+            cat_overlap[name].add(name)
+            for ci in cat.iter('cat-item'):
+                l = ci.get('lemma', '')
+                t = ci.get('tags', '')
+                cats[name].add(l+'@'+t if l else t)
+            for k, v in cats.items():
+                if k == name: continue
+                if not v.isdisjoint(cats[name]):
+                    cat_overlap[k].add(name)
+                    cat_overlap[name].add(k)
+        pat2rule = defaultdict(list)
+        for rule in self.tree.iter('rule'):
+            pat = []
+            for pi in rule.iter('pattern-item'):
+                pat.append(pi.get('n'))
+            for line, opat in pat2rule[len(pat)]:
+                if all(b in cat_overlap[a] for a, b in zip(pat, opat)):
+                    ls = []
+                    for a, b in zip(pat, opat):
+                        s = cats[a].intersection(cats[b])
+                        ls.append((sorted(s) + ['*'])[0])
+                    ex = ' '.join(ls)
+                    self.record('overlapping-paths', rule.sourceline, ex, line)
+                    break
+            pat2rule[len(pat)].append((rule.sourceline, pat))
