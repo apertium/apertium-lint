@@ -13,26 +13,31 @@ class LexCLinter(TreeSitterLinter):
         'multichar-redef': (Verbosity.Warn, 'Multichar symbol {0} defined multiple times.'),
         'undef-tag': (Verbosity.Error, 'Undefined tag {0}.'),
         'undef-archi': (Verbosity.Error, 'Undefined archiphoneme {0}'),
+        'left-empty': (Verbosity.Error, 'Dictionary can be empty on the left-hand side. Check the lexicon sequence {0}.'),
+        'right-empty': (Verbosity.Error, 'Dictionary can be empty on the right-hand side. Check the lexicon sequence {0}.'),
     }
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.plain_continue = defaultdict(set)
+        self.entries = defaultdict(set)
+        self.entries_collected = False
+    def text_or_blank(self, node):
+        if node:
+            return self.text(node)
+        else:
+            return ''
     def process_lexicon_line(self, lex, line):
         l = ''
         r = ''
         com = TSA.end_comment(line)
-        gloss = self.text(com).strip('!').strip() if com else ''
-        cont = None
-        for ch in line.children:
-            if ch.type == 'lexicon_name':
-                cont = self.text(ch)
-        if line.children[0].type == 'lexicon_string':
-            l = self.text(line.children[0])
-            r = l
-        elif line.children[0].type == 'lexicon_pair':
-            for i, ch in enumerate(line.children[0].children):
-                if ch.type == 'lexicon_string':
-                    if i == 0:
-                        l = self.text(ch)
-                    else:
-                        r = self.text(ch)
+        gloss = self.text_or_blank(com).strip('!').strip()
+        cont = self.text_or_blank(line.child_by_field_name('continuation'))
+        whole = self.text_or_blank(line.child_by_field_name('whole'))
+        l = self.text_or_blank(line.child_by_field_name('left'))
+        r = self.text_or_blank(line.child_by_field_name('right'))
+        if whole:
+            l = whole
+            r = whole
         if cont and (l or r):
             self.entries[lex].add((l, r, gloss, cont))
         elif cont:
@@ -47,12 +52,12 @@ class LexCLinter(TreeSitterLinter):
             elif line.type == 'lexicon_line':
                 self.process_lexicon_line(name, line)
     def collect_stems(self):
-        self.plain_continue = defaultdict(set)
-        self.entries = defaultdict(set)
-        nodes = self.tree.children
-        for i, lex in enumerate(nodes):
-            if lex.type == 'lexicon':
-                self.process_lexicon(lex)
+        if not self.entries_collected:
+            nodes = self.tree.children
+            for i, lex in enumerate(nodes):
+                if lex.type == 'lexicon':
+                    self.process_lexicon(lex)
+            self.entries_collected = True
     def stat_stems(self):
         self.collect_stems()
         initial_lex = {'Root'}
@@ -128,3 +133,46 @@ class LexCLinter(TreeSitterLinter):
                         t = t[2:]
                 else:
                     t = t[1:]
+    def check_empty_paths(self):
+        # it would be nice if this could have real line numbers
+        # but it's not clear where to put them
+        self.collect_stems()
+        left_empty = defaultdict(set)
+        right_empty = defaultdict(set)
+        left_empty.update(self.plain_continue)
+        right_empty.update(self.plain_continue)
+        for k, v in self.entries.items():
+            for l, r, g, c in v:
+                if not l:
+                    left_empty[k].add(c)
+                if not r:
+                    right_empty[k].add(c)
+        def dijkstra(dct):
+            max_dist = len(dct) * 10
+            dists = {}
+            prev = {}
+            dists['Root'] = 0
+            todo = ['Root']
+            while todo:
+                next_todo = []
+                for k in todo:
+                    d = dists[k] + 1
+                    for v in sorted(dct[k]):
+                        if dists.setdefault(v, d) == d:
+                            next_todo.append(v)
+                            prev[v] = k
+                todo = next_todo
+            if '#' in prev:
+                l = ['#']
+                c = '#'
+                while c != 'Root':
+                    c = prev[c]
+                    l.append(c)
+                return list(reversed(l))
+            return None
+        l = dijkstra(left_empty)
+        if l:
+            self.record('left-empty', 1, ' '.join(l))
+        r = dijkstra(right_empty)
+        if r:
+            self.record('right-empty', 1, ' '.join(r))
