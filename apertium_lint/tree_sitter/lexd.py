@@ -20,6 +20,7 @@ class LexdLinter(TreeSitterLinter):
         'partition': (Verbosity.Warn, 'Line can be partitioned into sub-patterns to decrease the number of overlapping sets of paired tokens.\n{0}\n  Possible partition point'),
         'tag-unuse': (Verbosity.Warn, 'Tag {0} set but never used in a filter.'),
         'tag-unset': (Verbosity.Warn, 'Tag {0} used in a filter but never set.'),
+        'nonempty-anon-left': (Verbosity.Suggestion, 'Non-tag content is not normally expected on the left side of an anonymous lexicon. This is often a typo.'),
     }
     def get_side(self, node, count_type):
         parts = ''
@@ -133,3 +134,14 @@ class LexdLinter(TreeSitterLinter):
     def check_patterns(self):
         for line in self.iter_type('pattern_line'):
             self.examine_pattern_line(line)
+    def per_anonymous_lexicon(self, node):
+        char = False
+        for c in node.children[1].children:
+            if c.type == 'colon':
+                break
+            elif c.type == 'tag_symbol':
+                return
+            else:
+                char = True
+        if char:
+            self.record('nonempty-anon-left', node)
