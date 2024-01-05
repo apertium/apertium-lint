@@ -34,7 +34,13 @@ def display_results(pth, args, blob):
     if ((len(blob['stats']) == 0 or not args.stats) and
         (len(blob['checks']) == 0 or not args.check)):
         return
-    print(pth.replace(os.getcwd(), '.'))
+    print_pth = pth.replace(os.getcwd(), '.')
+    if args.linewise:
+        if print_pth.count('/') == 1:
+            # just use the filename if it's in the top directory
+            print_pth = print_pth[2:]
+    else:
+        print(print_pth)
     if args.check:
         verb_labs = {
             1: 'Error',
@@ -44,7 +50,10 @@ def display_results(pth, args, blob):
         }
         for msg in blob['checks']:
             typ = verb_labs.get(msg['level'], 'Message')
-            print(f'{typ} ({msg["name"]}) on line {msg["line"]}: {msg["desc"]}')
+            if args.linewise:
+                print(f'{print_pth}:{msg["line"]}: {typ.lower()}: ({msg["name"]}) {msg["desc"]}')
+            else:
+                print(f'{typ} ({msg["name"]}) on line {msg["line"]}: {msg["desc"]}')
     if args.stats:
         disp_dict(blob['stats'])
 
@@ -74,7 +83,9 @@ def main():
     parser.add_argument('filename', action='store', nargs='*')
     parser.add_argument('--stats', '-s', action='store_true')
     parser.add_argument('--no-check', '-C', action='store_false', dest='check')
+    # these should probably be mutually exclusive and go to a format variable
     parser.add_argument('--json', '-j', action='store_true')
+    parser.add_argument('--linewise', '--linewize', '-l', action='store_true')
     parser.add_argument('--max-error', action='store', type=int, default=-1,
                         metavar='N', help='Exit with non-zero status if more than N errors found')
     parser.add_argument('--max-warn', action='store', type=int, default=-1,
