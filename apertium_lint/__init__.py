@@ -16,6 +16,7 @@ import os
 import json
 import sys
 from collections import defaultdict
+import subprocess
 
 def disp_dict(dct, indent=0):
     prefix = '  '*indent
@@ -69,8 +70,15 @@ def lint_path(pth, args, totals=None):
     if os.path.isfile(pth):
         lint_file(pth, args, totals)
     elif os.path.isdir(pth):
+        skip = set()
+        if args.ignore:
+            # There's probably a safer way to write this call...
+            proc = subprocess.run('git check-ignore *',
+                                  shell=True, capture_output=True, cwd=pth)
+            if proc.returncode == 0:
+                skip = set(proc.stdout.decode('utf-8').splitlines())
         for ent in os.scandir(pth):
-            if ent.name.startswith('.'):
+            if ent.name.startswith('.') or ent.name in skip:
                 continue
             if ent.is_file():
                 lint_file(ent.path, args, totals)
@@ -83,6 +91,8 @@ def main():
     parser.add_argument('filename', action='store', nargs='*')
     parser.add_argument('--stats', '-s', action='store_true')
     parser.add_argument('--no-check', '-C', action='store_false', dest='check')
+    parser.add_argument('--include-ignored', '-I', action='store_false',
+                        dest='ignore', help='Also lint files in .gitignore')
     # these should probably be mutually exclusive and go to a format variable
     parser.add_argument('--json', '-j', action='store_true')
     parser.add_argument('--linewise', '--linewize', '-l', action='store_true')
