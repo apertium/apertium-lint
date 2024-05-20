@@ -11,15 +11,9 @@ class BlankManipulation(unittest.TestCase, LintTestBase):
     <def-cat n="nom">
       <cat-item tags="n.*"/>
     </def-cat>
-    <def-cat n="sent">
-      <cat-item tags="sent"/>
-    </def-cat>
   </section-def-cats>
 
   <section-def-attrs>
-    <def-attr n="a_cas">
-      <attr-item tags="nom"/>
-    </def-attr>
   </section-def-attrs>
 
   <section-def-vars>
@@ -72,5 +66,61 @@ class BlankManipulation(unittest.TestCase, LintTestBase):
 '''
     expected_class = 'TransferLinter'
     expected_checks = [
-        (24, 'blank-manipulation'),
+        (18, 'blank-manipulation'),
+    ]
+
+class UndefinedAndUnused(unittest.TestCase, LintTestBase):
+    file_name = 'test.t1x'
+    file_contents = '''
+<transfer default="lu">
+  <section-def-cats>
+    <def-cat n="nom">
+      <cat-item tags="n.*"/>
+    </def-cat>
+    <def-cat n="nom">
+      <cat-item tags="n"/>
+    </def-cat>
+  </section-def-cats>
+
+  <section-def-attrs>
+    <def-attr n="a_case">
+      <attr-item tags="nom"/>
+      <attr-item tags="acc"/>
+    </def-attr>
+  </section-def-attrs>
+
+  <section-def-vars>
+  </section-def-vars>
+
+  <section-def-macros>
+  </section-def-macros>
+
+  <section-rules>
+    <rule comment="REGLA: nom nom">
+      <pattern>
+        <pattern-item n="nom"/>
+        <pattern-item n="nom"/>
+      </pattern>
+      <action>
+        <out>
+          <lu>
+            <clip pos="1" side="tl" part="whole"/>
+          </lu>
+          <b/>
+          <var n="macro_generated_lu"/>
+          <b/>
+          <lu>
+            <clip pos="2" side="tl" part="whole"/>
+          </lu>
+        </out>
+      </action>
+    </rule>
+  </section-rules>
+</transfer>
+'''
+    expected_class = 'TransferLinter'
+    expected_checks = [
+        (7, 'redef'),
+        (13, 'unuse'),
+        (37, 'undef'),
     ]

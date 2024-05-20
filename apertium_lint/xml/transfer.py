@@ -10,6 +10,7 @@ class TransferLinter(XmlLinter):
         'wrong-arg-count': (Verbosity.Error, 'Macro {0} called with {1} arguments but defined with {2}.'),
         'blank-manipulation': (Verbosity.Warn, '<let> copies a blank to a variable, which can corrupt formatting.'),
         'overlapping-paths': (Verbosity.Warn, 'The sequence [{0}] matches both this rule and the rule on line {1}.'),
+        'redef': (Verbosity.Error, '{0} {1} redefined. Original definition on line {2}.'),
     }
     def stat_rules(self):
         self.record_child_count(('rules'), self.tree, 'rule')
@@ -72,3 +73,50 @@ class TransferLinter(XmlLinter):
                     self.record('overlapping-paths', rule.sourceline, ex, line)
                     break
             pat2rule[len(pat)].append((rule.sourceline, pat))
+    def check_defuse(self):
+        defined = defaultdict(lambda: defaultdict(list))
+        used = defaultdict(lambda: defaultdict(list))
+        tags = {
+            'append': ('var', 'n'),
+            'call-macro': ('macro', 'n'),
+            'case-of': ('attr', 'part'),
+            'clip': ('attr', 'part'),
+            'list': ('list', 'n'),
+            'pattern-item': ('cat', 'n'),
+            'var': ('var', 'n'),
+        }
+        for node in self.tree.iter():
+            tag = str(node.tag)
+            if tag.startswith('def-'):
+                defined[node.tag[4:]][node.get('n')].append(node.sourceline)
+            elif node.tag in tags:
+                typ, attr = tags[node.tag]
+                used[typ][node.get(attr)].append(node.sourceline)
+            elif node.tag == 'chunk':
+                if 'namefrom' in node.attrib:
+                    used['var'][node.get('namefrom')].append(node.sourceline)
+                elif 'case' in node.attrib:
+                    used['var'][node.get('case')].append(node.sourceline)
+        # TODO: these won't get localized
+        print_names = {
+            'attr': 'Attribute',
+            'cat': 'Category',
+            'list': 'List',
+            'macro': 'Macro',
+            'var': 'Variable',
+        }
+        for typ in defined:
+            for name, lines in sorted(defined[typ].items()):
+                if len(lines) > 1:
+                    for ln in lines[1:]:
+                        self.record('redef', ln, print_names[typ], name, lines[0])
+                if name not in used[typ]:
+                    self.record('unuse', lines[0], print_names[typ], name)
+        special_attr = ['lem', 'lemh', 'lemq', 'whole', 'tags']
+        for typ in used:
+            for name in used[typ]:
+                if typ == 'attr' and name in special_attr:
+                    continue
+                if name not in defined[typ]:
+                    for line in used[typ][name]:
+                        self.record('undef', line, print_names[typ], name)
