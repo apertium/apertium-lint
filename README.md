@@ -39,3 +39,12 @@ Sets:	35
 Alphabet symbol pairs:	169
 Errors: 0 Warnings: 0 Suggestions: 0 Nitpicks: 0
 ```
+
+## Installation:
+
+### Debian/Ubuntu:
+
+```sh
+$ sudo apt install libtree-sitter-dev
+$ pipx install apertium-lint
+```
