@@ -40,11 +40,16 @@ Alphabet symbol pairs:	169
 Errors: 0 Warnings: 0 Suggestions: 0 Nitpicks: 0
 ```
 
+## Prerequisites:
+
+- python 3
+- pip or pipx (see https://pipx.pypa.io/latest/installation/ for how to install pipx on Debian/Ubuntu/Macos etc.)
+
 ## Installation:
 
-### Debian/Ubuntu:
+If you have `pipx` installed, you can just do:
 
 ```sh
-$ sudo apt install libtree-sitter-dev
 $ pipx install apertium-lint
 ```
+(Alternatively, `pip install apertium-lint` should also work, but plain `pip` can make a bit of a mess if you have lots of packages installed on your user.)
