@@ -28,9 +28,8 @@ class TwolCLinter(TreeSitterLinter):
         if hasattr(self, 'symbols'):
             return
         self.symbols = defaultdict(dict)
-        q = TSA.TWOLC.query('(alphabet [(symbol) @sym (symbol_pair) @pair])')
-        captures = q.captures(self.tree)
-        for node, kind in captures:
+        q = '(alphabet [(symbol) @sym (symbol_pair) @pair])'
+        for node, kind in self.query(q):
             if kind == 'sym':
                 sym = self.text(node)
                 self.symbols[sym][sym] = TSA.line(node)

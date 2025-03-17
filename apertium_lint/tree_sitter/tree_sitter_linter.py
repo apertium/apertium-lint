@@ -31,7 +31,10 @@ class TreeSitterLinter(FileLinter):
                                                            tags, nest)))
     def query(self, qr, node=None):
         q = self.language.query(qr)
-        yield from q.captures(node or self.tree)
+        cap = q.captures(node or self.tree)
+        for c in cap:
+            for v in cap[c]:
+                yield v, c
     def iter_type(self, name, node=None):
         for n, _ in self.query(f'({name}) @thing', node):
             yield n
