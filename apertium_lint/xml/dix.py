@@ -12,6 +12,10 @@ class DixLinter(XmlLinter):
         'LitSpace': (Verbosity.Warn, 'Spaces in entries should be written with <b/>.'),
         'OtherSpace': (Verbosity.Error, 'Entries should not contain space characters.'),
     }
+    StatLabels = {
+        'section_entries': 'Entries in each section',
+        'pardef_entries': 'Entries in each pardef',
+    }
     def collect_child_strings(self, node, nonempty=False):
         ret = []
         l = ''

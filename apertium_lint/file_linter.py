@@ -91,8 +91,12 @@ class FileLinter:
         self.reports.append((line, level, key, fs.format(*args)))
     def _get_stat_label(self, label, default):
         for cls in self.__class__.__mro__:
-            if hasattr(cls, 'StatLabels') and label in cls.StatLabels:
+            if not hasattr(cls, 'StatLabels'):
+                continue
+            if label in cls.StatLabels:
                 return cls.StatLabels[label]
+            elif len(label) == 1 and label[0] in cls.StatLabels:
+                return cls.StatLabels[label[0]]
         return default
     def get_stat(self, key):
         if isinstance(key, str):

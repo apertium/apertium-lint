@@ -47,8 +47,6 @@ class LexCLinter(TreeSitterLinter):
         for i, line in enumerate(lex.children):
             if line.type == 'lexicon_name':
                 name = self.text(line)
-            elif line.type == 'empty_lexicon_line':
-                self.plain_continue[name].add(self.text(line.children[0]))
             elif line.type == 'lexicon_line':
                 self.process_lexicon_line(name, line)
     def collect_stems(self):
@@ -72,7 +70,7 @@ class LexCLinter(TreeSitterLinter):
         lemma_cont = set()
         lemma_cont_no_mt = set()
         for lex in initial_lex:
-            for l, r, cont, com in self.entries[lex]:
+            for l, r, com, cont in self.entries[lex]:
                 lemma_gloss.add((l, com))
                 lemma_cont.add((l, cont))
                 if 'Use/MT' not in com:
