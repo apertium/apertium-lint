@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 from collections import defaultdict
+import inspect
 import os.path
 import re
 from unicodedata import normalize
@@ -11,12 +12,19 @@ class Verbosity:
     Suggestion = 3
     Nitpick = 4
 
-class BaseFileLinter:
+class FileLinter:
     Extensions = {} # str:class
     Identifiers = [] # (regex, class)
     PathIdentifiers = [] # same, but full path
 
-    ReportTypes = {} # short label : (level, format str)
+    # short label : (level, format str)
+    ReportTypes = {
+        'noNL': (Verbosity.Error, 'Missing trailing newline.'),
+        'unnorm': (Verbosity.Warn, 'Line contains non-normalized characters.'),
+        'NBSP': (Verbosity.Warn, 'Line contains non-breaking space.'),
+        'undef': (Verbosity.Error, '{0} {1} used but not defined.'),
+        'unuse': (Verbosity.Warn, '{0} {1} defined but not used.'),
+    }
     StatLabels = {} # short label : full label
 
     RunStat = []
@@ -28,11 +36,64 @@ class BaseFileLinter:
         self.path = path
         self.reports = [] # (line, level, key, text)
         self.statistics = defaultdict(lambda: 0)
+    def __init_subclass__(cls, *args, **kwargs):
+        super.__init_subclass__(*args, **kwargs)
+        stat_methods = []
+        check_methods = []
+        per_methods = defaultdict(lambda: [[], [], []])
+        for name, fn in inspect.getmembers(cls):
+            if not callable(fn):
+                continue
+            if name.startswith('stat_'):
+                stat_methods.append(name)
+            elif name.startswith('check_'):
+                check_methods.append(name)
+            elif name.startswith('statcheck_'):
+                stat_methods.append(name)
+                check_methods.append(name)
+            elif name.startswith('pre_'):
+                method_name = name.split('__')[0].split('_', 1)[1]
+                per_methods[method_name][0].append(name)
+            elif name.startswith('per_'):
+                method_name = name.split('__')[0].split('_', 1)[1]
+                per_methods[method_name][1].append(name)
+            elif name.startswith('post_'):
+                method_name = name.split('__')[0].split('_', 1)[1]
+                per_methods[method_name][2].append(name)
+        if per_methods:
+            stat_methods.append('run_per')
+            check_methods.append('run_per')
+        def nsort(ls):
+            return sorted(set(ls), key=lambda x: x.split('_', 1)[1])
+        cls.RunStat = nsort(stat_methods)
+        cls.RunCheck = nsort(check_methods)
+        cls.RunStatCheck = nsort(check_methods + stat_methods)
+        cls.RunPer = {k:list(map(sorted, v))
+                      for k, v in per_methods.items()}
+        if isinstance(cls.Extensions, list):
+            for e in cls.Extensions:
+                FileLinter.Extensions[e] = cls
+        for i in cls.Identifiers:
+            if isinstance(i, str):
+                FileLinter.Identifiers.append((re.compile(i), cls))
+        for pi in cls.PathIdentifiers:
+            if isinstance(pi, str):
+                FileLinter.PathIdentifiers.append((re.compile(pi), cls))
     def load(self):
         return True
+    def _get_report_label(self, label):
+        for cls in self.__class__.__mro__:
+            if label in cls.ReportTypes:
+                return cls.ReportTypes[label]
+        raise KeyError(f'Report type "{label}" is not defined.')
     def record(self, key, line, *args):
-        level, fs = self.ReportTypes[key]
+        level, fs = self._get_report_label(key)
         self.reports.append((line, level, key, fs.format(*args)))
+    def _get_stat_label(self, label, default):
+        for cls in self.__class__.__mro__:
+            if hasattr(cls, 'StatLabels') and label in cls.StatLabels:
+                return cls.StatLabels[label]
+        return default
     def get_stat(self, key):
         if isinstance(key, str):
             return self.statistics[key]
@@ -73,7 +134,7 @@ class BaseFileLinter:
                 val = self.__process_stats(v, list(key))
             sd = {
                 'name': k,
-                'long_name': self.StatLabels.get(key, k),
+                'long_name': self._get_stat_label(key, k),
                 'value': val
             }
             ret[k] = sd
@@ -107,78 +168,6 @@ class BaseFileLinter:
         self.__call_all(self.RunCheck)
     def run_statcheck(self):
         self.__call_all(self.RunStatCheck)
-
-class MetaFileLinter(type):
-    def __new__(cls, name, bases, attrs):
-        stat_methods = []
-        check_methods = []
-        per_methods = defaultdict(lambda: [[], [], []])
-        ext = attrs.get('Extensions', [])
-        ident = attrs.get('Identifiers', [])
-        path_ident = attrs.get('PathIdentifiers', [])
-        new_attrs = attrs.copy()
-        for a, v in attrs.items():
-            if a in ['Extensions', 'Identifiers', 'PathIdentifiers']:
-                del new_attrs[a]
-            elif a in ['ReportTypes', 'StatLabels']:
-                dct = {}
-                for b in bases:
-                    if hasattr(b, a):
-                        dct.update(getattr(b, a))
-                dct.update(v)
-                if a == 'StatLabels':
-                    dct2 = {}
-                    for k in dct:
-                        if isinstance(k, str):
-                            dct2[tuple([k])] = dct[k]
-                        else:
-                            dct2[k] = dct[k]
-                    new_attrs[a] = dct2
-                else:
-                    new_attrs[a] = dct
-            elif a.startswith('stat_') and callable(v):
-                stat_methods.append(a)
-            elif a.startswith('check_') and callable(v):
-                check_methods.append(a)
-            elif a.startswith('statcheck_') and callable(v):
-                stat_methods.append(a)
-                check_methods.append(a)
-            elif a.startswith('pre_') and callable(v):
-                method_name = a.split('__')[0].split('_', 1)[1]
-                per_methods[method_name][0].append(a)
-            elif a.startswith('per_') and callable(v):
-                method_name = a.split('__')[0].split('_', 1)[1]
-                per_methods[method_name][1].append(a)
-            elif a.startswith('post_') and callable(v):
-                method_name = a.split('__')[0].split('_', 1)[1]
-                per_methods[method_name][2].append(a)
-        if per_methods:
-            stat_methods.append('run_per')
-            check_methods.append('run_per')
-        def nsort(ls):
-            return sorted(set(ls), key=lambda x: x.split('_', 1)[1])
-        new_attrs['RunStat'] = nsort(stat_methods)
-        new_attrs['RunCheck'] = nsort(check_methods)
-        new_attrs['RunStatCheck'] = nsort(check_methods + stat_methods)
-        new_attrs['RunPer'] = {k:list(map(sorted, v))
-                               for k, v in per_methods.items()}
-        ret = super(MetaFileLinter, cls).__new__(cls, name, bases, new_attrs)
-        for e in ext:
-            BaseFileLinter.Extensions[e] = ret
-        for i in ident:
-            BaseFileLinter.Identifiers.append((re.compile(i), ret))
-        for pi in path_ident:
-            BaseFileLinter.PathIdentifiers.append((re.compile(pi), ret))
-        return ret
-
-class FileLinter(BaseFileLinter, metaclass=MetaFileLinter):
-    ReportTypes = {
-        'noNL': (Verbosity.Error, 'Missing trailing newline.'),
-        'unnorm': (Verbosity.Warn, 'Line contains non-normalized characters.'),
-        'NBSP': (Verbosity.Warn, 'Line contains non-breaking space.'),
-        'undef': (Verbosity.Error, '{0} {1} used but not defined.'),
-        'unuse': (Verbosity.Warn, '{0} {1} defined but not used.'),
-    }
     def check_encoding(self):
         with open(self.path, 'rb') as fin:
             try:
@@ -238,16 +227,16 @@ class SkipLinting(FileLinter):
         return False
 
 def identify(path, extension):
-    if extension in BaseFileLinter.Extensions:
-        return BaseFileLinter.Extensions[extension]
+    if extension in FileLinter.Extensions:
+        return FileLinter.Extensions[extension]
     filename = os.path.basename(path)
     ext = os.path.splitext(filename)[1].lstrip('.')
-    if ext in BaseFileLinter.Extensions:
-        return BaseFileLinter.Extensions[ext]
-    for r, c in BaseFileLinter.PathIdentifiers:
+    if ext in FileLinter.Extensions:
+        return FileLinter.Extensions[ext]
+    for r, c in FileLinter.PathIdentifiers:
         if r.search(path):
             return c
-    for r, c in BaseFileLinter.Identifiers:
+    for r, c in FileLinter.Identifiers:
         if r.match(filename):
             return c
     return FileLinter
