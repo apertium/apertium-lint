@@ -15,33 +15,46 @@ class RTXLinter(TreeSitterLinter):
         'attrs': 'Attribute categories',
         'reduce_rules': 'Reduction rules',
     }
+    
     ReportTypes = {
         'redef-retag': (Verbosity.Error, 'Redefinition of tag-rewrite rule from {0} to {1}. First definition on line {2}.'),
         'undef-retag': (Verbosity.Error, 'No tag-rewrite rule from {0} to {1} is defined.'),
         'unuse-retag': (Verbosity.Warn, 'Tag-rewrite rule from {0} to {1} is defined but not used.'),
         'inconsistent-operator': (Verbosity.Warn, 'Inconsistent operator name {0}. Prior instance on line {1} has {2}.'),
     }
+    
     def stat_rules(self):
         self.count_node('out_rules', 'output_rule')
         self.count_node('attrs', 'attr_rule')
-        qr = '(output_rule (lu_cond) @lc)'
-        self.record_stat('macros', sum(1 for n in self.query(qr)))
+        # Query to identify specific `<vblex>` usage in output rules
+        qr_vblex = '(output_rule (lu_cond (attr_name "vblex")) @vblex_rule)'
+        count_vblex = sum(1 for n in self.query(qr_vblex))
+        self.record_stat('macros', count_vblex)  # Record `<vblex>` specific macros
+        if count_vblex == 0:
+            self.record('unuse-retag', None, 'vblex', 'No explicit output rule for <vblex> found')
         self.count_node('reduce_rules', 'reduce_rule')
         self.count_node('retag_rules', 'retag_rule')
+        
     def check_retag(self):
         rdef = {}
         for node in self.iter_type('retag_rule'):
             src = self.text(node.child_by_field_name('src_attr'))
             trg = self.text(node.child_by_field_name('trg_attr'))
+            
+            if src == "vblex" and trg != "vblex":
+                self.record('unuse-retag', node, src, trg)
+                
             if (src, trg) in rdef:
                 self.record('redef-retag', node, src, trg, rdef[(src, trg)])
             else:
                 rdef[(src, trg)] = TSA.line(node)
+                
         ruse = defaultdict(list)
         qr = '''[
                  (set_var value: (clip attr: (ident))) @sv
                  (clip convert: (ident)) @c
                 ]'''
+        
         for node, typ in self.query(qr):
             src, trg = '', ''
             if typ == 'sv':
@@ -56,15 +69,19 @@ class RTXLinter(TreeSitterLinter):
                 trg = self.text(node.child_by_field_name('convert'))
             if src and trg and src != trg:
                 ruse[(src, trg)].append(TSA.line(node))
+                
         for src, trg in rdef.keys():
             if (src, trg) not in ruse and src != trg:
-                self.record('unuse-retag', rdef[(src, trg)], src, trg)
+                if src == "vblex" or trg == "vblex":
+                    self.record('unuse-retag', rdef[(src, trg)], src, trg)
+                
         for src, trg in ruse.keys():
             if src and trg and (src, trg) not in rdef:
                 if trg in ['lem', 'lemh', 'lemq']:
                     continue
                 for ln in ruse[(src, trg)]:
                     self.record('undef-retag', ln, src, trg)
+                    
     def check_operators(self):
         def get_op(opstr):
             s = opstr.replace('_', '').replace('-', '').lower()
@@ -86,9 +103,11 @@ class RTXLinter(TreeSitterLinter):
             return s, caseless
         opuse = defaultdict(list)
         qr = '[(str_op) @op (and) @op (or) @op (not) @op]'
+        
         for node, typ in self.query(qr):
             txt = self.text(node)
             opuse[get_op(txt)].append((txt, TSA.line(node)))
+            
         for opls in opuse.values():
             first_op = opls[0][0]
             first_line = opls[0][1]
