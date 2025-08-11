@@ -52,7 +52,8 @@ class TransferLinter(XmlLinter):
             for ci in cat.iter('cat-item'):
                 l = ci.get('lemma', '')
                 t = ci.get('tags', '')
-                cats[name].add(l+'@'+t if l else t)
+                n = ci.get('name', '')
+                cats[name].add(n or (l+'@'+t if l else t))
             for k, v in cats.items():
                 if k == name: continue
                 if not v.isdisjoint(cats[name]):
