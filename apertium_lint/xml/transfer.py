@@ -112,7 +112,8 @@ class TransferLinter(XmlLinter):
                         self.record('redef', ln, print_names[typ], name, lines[0])
                 if name not in used[typ]:
                     self.record('unuse', lines[0], print_names[typ], name)
-        special_attr = ['lem', 'lemh', 'lemq', 'whole', 'tags']
+        special_attr = ['lem', 'lemh', 'lemq', 'whole', 'tags',
+                        'chname', 'chcontent', 'content']
         for typ in used:
             for name in used[typ]:
                 if typ == 'attr' and name in special_attr:
