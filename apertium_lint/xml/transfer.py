@@ -11,6 +11,8 @@ class TransferLinter(XmlLinter):
         'blank-manipulation': (Verbosity.Warn, '<let> copies a blank to a variable, which can corrupt formatting.'),
         'overlapping-paths': (Verbosity.Warn, 'The sequence [{0}] matches both this rule and the rule on line {1}.'),
         'redef': (Verbosity.Error, '{0} {1} redefined. Original definition on line {2}.'),
+        'out-of-range-rule': (Verbosity.Error, 'Clip has position {0} but rule only matches {1} items.'),
+        'out-of-range-macro': (Verbosity.Error, 'Clip has position {0} but macro only takes {1} parameters.'),
     }
     def stat_rules(self):
         self.record_child_count(('rules'), self.tree, 'rule')
@@ -90,10 +92,10 @@ class TransferLinter(XmlLinter):
             tag = str(node.tag)
             if tag.startswith('def-'):
                 defined[node.tag[4:]][node.get('n')].append(node.sourceline)
-            elif node.tag in tags:
+            elif tag in tags:
                 typ, attr = tags[node.tag]
                 used[typ][node.get(attr)].append(node.sourceline)
-            elif node.tag == 'chunk':
+            elif tag == 'chunk':
                 if 'namefrom' in node.attrib:
                     used['var'][node.get('namefrom')].append(node.sourceline)
                 elif 'case' in node.attrib:
@@ -122,3 +124,23 @@ class TransferLinter(XmlLinter):
                 if name not in defined[typ]:
                     for line in used[typ][name]:
                         self.record('undef', line, print_names[typ], name)
+    def out_of_range_clips(self, node, max_pos):
+        for clip in node.iter('clip'):
+            pos = clip.get('pos')
+            if pos and pos.isdigit():
+                n = int(pos)
+                if n > max_pos:
+                    yield clip, n
+    def check_positions(self):
+        for rule in self.tree.iter('rule'):
+            count = len(list(rule.iter('pattern-item')))
+            for clip, n in self.out_of_range_clips(rule, count):
+                self.record('out-of-range-rule', clip, n, count)
+        for mac in self.tree.iter('def-macro'):
+            npar = mac.get('npar')
+            if npar and npar.isdigit():
+                npar = int(npar)
+            else:
+                continue
+            for clip, n in self.out_of_range_clips(mac, npar):
+                self.record('out-of-range-macro', clip, n, npar)
