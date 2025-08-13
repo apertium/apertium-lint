@@ -181,3 +181,58 @@ class OutOfRange(unittest.TestCase, LintTestBase):
         (21, 'out-of-range-macro'),
         (38, 'out-of-range-rule'),
     ]
+
+class OutOfRangePostchunk(unittest.TestCase, LintTestBase):
+    file_name = 'test.t3x'
+    file_contents = '''
+<postchunk>
+  <section-def-cats>
+    <def-cat n="nom_nom">
+      <cat-item lemma="nom_nom"/>
+    </def-cat>
+  </section-def-cats>
+
+  <section-def-attrs>
+    <def-attr n="nbr">
+      <attr-item v="sg"/>
+    </def-attr>
+  </section-def-attrs>
+
+  <section-def-vars>
+  </section-def-vars>
+
+  <section-def-macros>
+    <def-macro n="foo" npar="3">
+      <let><clip pos="4" side="tl" part="nbr"/><lit-tag v="pl"/></let>
+    </def-macro>
+  </section-def-macros>
+
+  <section-rules>
+    <rule comment="REGLA: nom nom">
+      <pattern>
+        <pattern-item n="nom_nom"/>
+      </pattern>
+      <action>
+        <call-macro n="foo">
+          <with-param pos="0"/>
+          <with-param pos="1"/>
+          <with-param pos="2"/>
+        </call-macro>
+        <out>
+          <lu>
+            <clip pos="2" side="tl" part="whole"/>
+          </lu>
+          <b/>
+          <lu>
+            <clip pos="1" side="tl" part="whole"/>
+          </lu>
+        </out>
+      </action>
+    </rule>
+  </section-rules>
+</postchunk>
+'''
+    expected_class = 'TransferLinter'
+    expected_checks = [
+        (20, 'out-of-range-macro'),
+    ]

@@ -132,10 +132,12 @@ class TransferLinter(XmlLinter):
                 if n > max_pos:
                     yield clip, n
     def check_positions(self):
+        top_level_element = self.tree.tag
         for rule in self.tree.iter('rule'):
             count = len(list(rule.iter('pattern-item')))
-            for clip, n in self.out_of_range_clips(rule, count):
-                self.record('out-of-range-rule', clip, n, count)
+            if top_level_element != "postchunk":
+                for clip, n in self.out_of_range_clips(rule, count):
+                    self.record('out-of-range-rule', clip, n, count)
         for mac in self.tree.iter('def-macro'):
             npar = mac.get('npar')
             if npar and npar.isdigit():
