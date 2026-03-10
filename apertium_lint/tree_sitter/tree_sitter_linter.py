@@ -30,8 +30,10 @@ class TreeSitterLinter(FileLinter):
                          sum(1 for _ in self.iter_children(self.tree,
                                                            tags, nest)))
     def query(self, qr, node=None):
-        q = self.language.query(qr)
-        cap = q.captures(node or self.tree)
+        from tree_sitter import Query, QueryCursor
+        q = Query(self.language, qr)
+        cur = QueryCursor(q)
+        cap = cur.captures(node or self.tree)
         for c in cap:
             for v in cap[c]:
                 yield v, c
